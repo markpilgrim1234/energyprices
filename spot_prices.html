@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spot Prices</title>
+  <style>
+    :root {
+      --bg: #f6f7f2;
+      --panel: #ffffff;
+      --ink: #18201c;
+      --muted: #667069;
+      --line: #d9dfd7;
+      --green: #1f8a70;
+      --shadow: 0 12px 34px rgba(31, 44, 37, 0.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(980px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 42px 0;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      margin-bottom: 18px;
+      color: var(--ink);
+      font-weight: 800;
+      text-decoration: none;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(34px, 6vw, 64px);
+      line-height: 1;
+      letter-spacing: 0;
+    }
+    p {
+      max-width: 680px;
+      margin: 14px 0 30px;
+      color: var(--muted);
+      font-size: 17px;
+      line-height: 1.55;
+    }
+    .nav {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+    }
+    a.card,
+    .disabled-card {
+      min-height: 170px;
+      display: grid;
+      align-content: space-between;
+      gap: 18px;
+      padding: 22px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: inherit;
+      text-decoration: none;
+      box-shadow: var(--shadow);
+    }
+    a.card:hover,
+    a.card:focus-visible {
+      border-color: var(--green);
+      outline: none;
+    }
+    .disabled-card {
+      opacity: 0.58;
+      cursor: default;
+    }
+    strong {
+      font-size: 28px;
+      line-height: 1.15;
+    }
+    span {
+      color: var(--muted);
+      line-height: 1.45;
+    }
+    @media (max-width: 900px) {
+      .nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 560px) {
+      .nav { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back-link" href="index.html">&lt;-- Back to Home</a>
+    <h1>Spot Prices</h1>
+    <p>Explore arithmetic average wholesale electricity spot prices by country and time granularity.</p>
+    <nav class="nav" aria-label="Spot price dashboards">
+      <a class="card" href="spot_price_map.html">
+        <strong>Map</strong>
+        <span>View average spot prices across Europe with country labels.</span>
+      </a>
+      <a class="card" href="wholesale_average.html">
+        <strong>Wholesale average</strong>
+        <span>Calculate arithmetic average prices by day, month, or year.</span>
+      </a>
+      <a class="card" href="daily_spread.html">
+        <strong>Daily spread</strong>
+        <span>Compare the difference between daily maximum and minimum prices.</span>
+      </a>
+      <a class="card" href="captured_price.html">
+        <strong>Captured price</strong>
+        <span>Estimate technology captured prices using synthetic hourly generation profiles.</span>
+      </a>
+    </nav>
+    <footer style="margin-top: 28px; color: #667069; font-size: 13px;">Source: Entsoe</footer>
+  </main>
+</body>
+</html>

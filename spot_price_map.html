@@ -1,0 +1,395 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spot Price Map</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <style>
+    :root {
+      --bg: #f6f7f2;
+      --panel: #ffffff;
+      --ink: #18201c;
+      --muted: #667069;
+      --line: #d9dfd7;
+      --green: #1f8a70;
+      --red: #c83f3f;
+      --shadow: 0 12px 34px rgba(31, 44, 37, 0.1);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 38px;
+    }
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      margin-bottom: 18px;
+      color: var(--ink);
+      font-weight: 800;
+      text-decoration: none;
+    }
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 48px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+    .subtitle {
+      max-width: 650px;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      gap: 12px;
+      min-width: min(640px, 100%);
+    }
+    label {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      font: inherit;
+      padding: 0 12px;
+    }
+    select:disabled { opacity: 0.48; }
+    .map-wrap {
+      position: relative;
+      height: min(760px, calc(100vh - 235px));
+      min-height: 620px;
+      overflow: hidden;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #e7f0f3;
+    }
+    .map-title {
+      position: absolute;
+      left: 58px;
+      top: 14px;
+      z-index: 500;
+      padding: 8px 10px;
+      border: 1px solid rgba(24, 32, 28, 0.12);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.92);
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 800;
+      box-shadow: 0 6px 18px rgba(31, 44, 37, 0.08);
+    }
+    .price-marker {
+      min-width: 74px;
+      transform: translate(-50%, -50%);
+      padding: 5px 7px;
+      border: 1px solid rgba(24, 32, 28, 0.12);
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.94);
+      box-shadow: 0 6px 18px rgba(31, 44, 37, 0.12);
+      text-align: center;
+      line-height: 1.15;
+      pointer-events: auto;
+    }
+    .price-marker.selected {
+      border-color: var(--green);
+      box-shadow: 0 0 0 3px rgba(31, 138, 112, 0.2), 0 6px 18px rgba(31, 44, 37, 0.12);
+    }
+    .price-marker strong {
+      display: block;
+      color: var(--ink);
+      font-size: 11px;
+    }
+    .price-marker span {
+      display: block;
+      margin-top: 3px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .price-marker.negative span { color: var(--red); }
+    .leaflet-control-attribution {
+      font-size: 10px;
+    }
+    @media (max-width: 940px) {
+      header { display: grid; }
+      .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .map-wrap { height: 720px; }
+    }
+    @media (max-width: 560px) {
+      main { width: min(100vw - 20px, 1180px); padding-top: 18px; }
+      .controls { grid-template-columns: 1fr; }
+      .map-wrap { height: 760px; min-height: 760px; }
+      .price-marker { min-width: 64px; padding: 4px 5px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back-link" href="spot_prices.html">&lt;-- Back to spot prices</a>
+    <header>
+      <div>
+        <h1>Map</h1>
+        <p class="subtitle">European spot price labels based on the selected country highlight, year, month, and granularity.</p>
+      </div>
+      <div class="controls">
+        <label>
+          Country
+          <select id="countrySelect"></select>
+        </label>
+        <label>
+          Year
+          <select id="yearSelect"></select>
+        </label>
+        <label>
+          Month
+          <select id="monthSelect"></select>
+        </label>
+        <label>
+          Granularity
+          <select id="granularitySelect">
+            <option value="day">Day</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+          </select>
+        </label>
+      </div>
+    </header>
+    <section class="map-wrap">
+      <div id="map"></div>
+      <div id="mapTitle" class="map-title">Loading data...</div>
+    </section>
+    <footer style="margin-top: 28px; color: #667069; font-size: 13px;">Source: Entsoe</footer>
+  </main>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="data/spot_prices.js"></script>
+  <script>
+    const countrySelect = document.querySelector("#countrySelect");
+    const yearSelect = document.querySelector("#yearSelect");
+    const monthSelect = document.querySelector("#monthSelect");
+    const granularitySelect = document.querySelector("#granularitySelect");
+    const mapTitle = document.querySelector("#mapTitle");
+    let dataset;
+    let map;
+    let markerLayer;
+
+    const countryCenters = {
+      "Austria": [47.6, 14.2],
+      "Belgium": [50.7, 4.7],
+      "Bulgaria": [42.8, 25.2],
+      "Croatia": [45.1, 16.4],
+      "Czechia": [49.8, 15.5],
+      "Denmark": [56.1, 10.0],
+      "Estonia": [58.7, 25.0],
+      "Finland": [63.7, 26.3],
+      "France": [46.4, 2.4],
+      "Germany": [51.1, 10.4],
+      "Greece": [39.1, 22.9],
+      "Hungary": [47.1, 19.4],
+      "Ireland": [53.2, -8.2],
+      "Italy": [42.9, 12.6],
+      "Latvia": [56.9, 24.6],
+      "Lithuania": [55.2, 23.9],
+      "Luxembourg": [49.8, 6.1],
+      "Montenegro": [42.8, 19.2],
+      "Netherlands": [52.2, 5.3],
+      "North Macedonia": [41.6, 21.7],
+      "Norway": [61.2, 8.5],
+      "Poland": [52.1, 19.2],
+      "Portugal": [39.6, -8.0],
+      "Romania": [45.9, 24.9],
+      "Serbia": [44.0, 20.8],
+      "Slovakia": [48.7, 19.7],
+      "Slovenia": [46.1, 14.9],
+      "Spain": [40.2, -3.6],
+      "Sweden": [62.6, 16.2],
+      "Switzerland": [46.8, 8.2],
+      "United Kingdom": [54.4, -2.8],
+    };
+
+    const formatPrice = (value) => value === null || value === undefined || Number.isNaN(value) ? "-" : value.toFixed(2);
+    const formatMonth = (key) => {
+      const [year, month] = key.split("-").map(Number);
+      return new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+    };
+
+    function setupMap() {
+      map = L.map("map", {
+        zoomControl: true,
+        scrollWheelZoom: true,
+      }).setView([48.8, 8.8], 5);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 8,
+        minZoom: 4,
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+
+      markerLayer = L.layerGroup().addTo(map);
+    }
+
+    function populateCountries() {
+      countrySelect.innerHTML = "";
+      dataset.countries.forEach((country) => {
+        const option = document.createElement("option");
+        option.value = country.name;
+        option.textContent = `${country.name} (${country.iso3})`;
+        countrySelect.append(option);
+      });
+    }
+
+    function countryYears(countryName) {
+      return dataset.countries.find((country) => country.name === countryName).years;
+    }
+
+    function populateYears(countryName) {
+      yearSelect.innerHTML = "";
+      countryYears(countryName).slice().reverse().forEach((year) => {
+        const option = document.createElement("option");
+        option.value = year;
+        option.textContent = year;
+        yearSelect.append(option);
+      });
+    }
+
+    function populateMonths(countryName, year) {
+      monthSelect.innerHTML = "";
+      const months = Object.keys(dataset.series[countryName].years[year].months).sort();
+      months.forEach((month) => {
+        const option = document.createElement("option");
+        option.value = month;
+        option.textContent = formatMonth(month).replace(` ${year}`, "");
+        monthSelect.append(option);
+      });
+    }
+
+    function countryValue(countryName) {
+      const year = yearSelect.value;
+      const month = monthSelect.value;
+      const granularity = granularitySelect.value;
+      const years = dataset.series[countryName].years;
+      if (!years[year]) return null;
+      if (granularity === "year") return years[year].averagePrice;
+      if (!years[year].months[month]) return null;
+      return years[year].months[month].averagePrice;
+    }
+
+    function periodLabel() {
+      if (granularitySelect.value === "year") return yearSelect.value;
+      return formatMonth(monthSelect.value);
+    }
+
+    function markerHtml(country, value) {
+      const classes = [
+        "price-marker",
+        country.name === countrySelect.value ? "selected" : "",
+        value < 0 ? "negative" : "",
+      ].filter(Boolean).join(" ");
+
+      return `<div class="${classes}"><strong>${country.iso3}</strong><span>${formatPrice(value)}</span></div>`;
+    }
+
+    function render() {
+      if (!map || !markerLayer) return;
+      markerLayer.clearLayers();
+      const period = periodLabel();
+      mapTitle.textContent = `Average spot prices, ${period}`;
+
+      dataset.countries.forEach((country) => {
+        const center = countryCenters[country.name];
+        if (!center) return;
+        const value = countryValue(country.name);
+        const marker = L.marker(center, {
+          icon: L.divIcon({
+            className: "",
+            html: markerHtml(country, value),
+            iconSize: [74, 40],
+            iconAnchor: [37, 20],
+          }),
+          title: `${country.name}: ${formatPrice(value)} EUR/MWh`,
+        });
+        marker.bindTooltip(`${country.name}: ${formatPrice(value)} EUR/MWh`, {
+          direction: "top",
+          offset: [0, -18],
+        });
+        marker.addTo(markerLayer);
+      });
+    }
+
+    function updateCountry() {
+      populateYears(countrySelect.value);
+      populateMonths(countrySelect.value, yearSelect.value);
+      render();
+    }
+
+    function updateYear() {
+      populateMonths(countrySelect.value, yearSelect.value);
+      render();
+    }
+
+    function boot(data) {
+      if (!window.L) {
+        mapTitle.textContent = "Map library not loaded. Check the internet connection.";
+        return;
+      }
+      dataset = data;
+      setupMap();
+      populateCountries();
+      const defaultCountry = dataset.countries.find((country) => country.name === "Germany") || dataset.countries[0];
+      countrySelect.value = defaultCountry.name;
+      populateYears(defaultCountry.name);
+      populateMonths(defaultCountry.name, yearSelect.value);
+      render();
+      setTimeout(() => {
+        map.invalidateSize();
+        map.setView([48.8, 8.8], 5);
+      }, 120);
+    }
+
+    countrySelect.addEventListener("change", updateCountry);
+    yearSelect.addEventListener("change", updateYear);
+    monthSelect.addEventListener("change", render);
+    granularitySelect.addEventListener("change", render);
+
+    if (window.SPOT_PRICE_DATA) {
+      boot(window.SPOT_PRICE_DATA);
+    } else {
+      mapTitle.textContent = "Data file not found. Run scripts/build_negative_prices.py first.";
+    }
+  </script>
+</body>
+</html>

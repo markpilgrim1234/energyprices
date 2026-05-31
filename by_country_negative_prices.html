@@ -167,50 +167,53 @@
       stroke-width: 2;
     }
 
-    .records {
-      padding: 18px;
+    .worst {
+      margin-top: 16px;
+      padding: 16px 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: 0 8px 20px rgba(31, 44, 37, 0.06);
     }
 
-    .records h2 {
-      margin: 0 0 14px;
-      font-size: 22px;
+    .worst h2 {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 17px;
       letter-spacing: 0;
     }
 
-    .record-grid {
+    .worst-list {
       display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
+      gap: 0;
+      max-height: 210px;
+      overflow: auto;
+      padding-right: 6px;
     }
 
-    .record {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 14px;
-      min-height: 106px;
+    .country-row {
+      display: grid;
+      grid-template-columns: minmax(160px, 1fr) repeat(2, minmax(120px, 180px));
+      gap: 10px;
+      align-items: center;
+      padding: 9px 0;
+      border-top: 1px solid var(--line);
     }
 
-    .record span {
+    .country-row strong,
+    .country-row span {
       display: block;
+    }
+
+    .country-row span {
       color: var(--muted);
       font-size: 12px;
-      font-weight: 800;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
+      line-height: 1.25;
     }
 
-    .record strong {
-      display: block;
-      margin-top: 8px;
-      font-size: clamp(24px, 3vw, 34px);
-      line-height: 1;
-    }
-
-    .record small {
-      display: block;
-      margin-top: 8px;
-      color: var(--muted);
-      line-height: 1.35;
+    .country-row strong {
+      font-size: 14px;
+      line-height: 1.25;
     }
 
     @media (max-width: 860px) {
@@ -218,9 +221,6 @@
         display: grid;
       }
 
-      .record-grid {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-      }
     }
 
     @media (max-width: 560px) {
@@ -230,11 +230,11 @@
       }
 
       .chart-panel,
-      .records {
+      .worst {
         padding: 12px;
       }
 
-      .record-grid {
+      .country-row {
         grid-template-columns: 1fr;
       }
 
@@ -246,7 +246,7 @@
 </head>
 <body>
   <main>
-    <a class="back-link" href="index.html">Back to home</a>
+    <a class="back-link" href="negative_prices.html">&lt;-- Back to negative prices</a>
     <header>
       <div>
         <h1>By Country Negative Prices</h1>
@@ -268,21 +268,11 @@
       <svg id="chart" viewBox="0 0 1100 520" role="img" aria-labelledby="chartTitle"></svg>
     </section>
 
-    <section class="records">
-      <h2>Country records</h2>
-      <div class="record-grid">
-        <div class="record">
-          <span>Record year</span>
-          <strong id="yearRecord">-</strong>
-          <small id="yearRecordDetail">0 hours</small>
-        </div>
-        <div class="record">
-          <span>Record month</span>
-          <strong id="monthRecord">-</strong>
-          <small id="monthRecordDetail">0 hours</small>
-        </div>
-      </div>
+    <section class="worst">
+      <h2>First worst countries in the last 12 months</h2>
+      <div id="worstList" class="worst-list">Loading data...</div>
     </section>
+    <footer style="margin-top: 28px; color: #667069; font-size: 13px;">Source: Entsoe</footer>
   </main>
 
   <script src="data/negative_prices.js"></script>
@@ -291,10 +281,7 @@
     const chartTitle = document.querySelector("#chartTitle");
     const chart = document.querySelector("#chart");
     const legend = document.querySelector("#legend");
-    const yearRecord = document.querySelector("#yearRecord");
-    const yearRecordDetail = document.querySelector("#yearRecordDetail");
-    const monthRecord = document.querySelector("#monthRecord");
-    const monthRecordDetail = document.querySelector("#monthRecordDetail");
+    const worstList = document.querySelector("#worstList");
 
     const colors = ["#2f66c5", "#1f8a70", "#d7832f", "#bf4c4c", "#7561b8"];
     const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -372,10 +359,6 @@
       const summary = getCountrySummary(countryName);
       const maxValue = Math.max(1, ...summary.curves.flatMap((curve) => curve.values.map((item) => item.value)));
 
-      yearRecord.textContent = summary.bestYear.year;
-      yearRecordDetail.textContent = `${summary.bestYear.value.toLocaleString("en")} negative hours`;
-      monthRecord.textContent = summary.bestMonth.month === "-" ? "-" : formatMonth(summary.bestMonth.month);
-      monthRecordDetail.textContent = `${summary.bestMonth.value.toLocaleString("en")} negative hours`;
       chartTitle.textContent = `${countryName}: latest five yearly cumulative curves`;
 
       legend.innerHTML = "";
@@ -425,6 +408,52 @@
       chart.append(el("text", { class: "axis-label", x: 16, y: margin.top - 8 }, "Cumulative negative hours"));
     }
 
+    function latestCompleteMonths(data) {
+      const months = new Set();
+      Object.values(data.series).forEach((countrySeries) => {
+        Object.entries(countrySeries).forEach(([month, monthData]) => {
+          if (monthData.isCompleteMonth) months.add(month);
+        });
+      });
+      return [...months].sort().slice(-12);
+    }
+
+    function renderWorstCountries(data) {
+      const months = latestCompleteMonths(data);
+      const rows = data.countries.map((country) => {
+        const countrySeries = data.series[country.name];
+        const totals = months.reduce((acc, month) => {
+          const monthData = countrySeries[month];
+          if (!monthData || !monthData.isCompleteMonth) return acc;
+          acc.negativeHours += monthData.totalNegativePrices;
+          acc.consecutiveEvents += monthData.days.filter((day) => {
+            return day.maxConsecutiveNegativePrices >= 6;
+          }).length;
+          return acc;
+        }, { negativeHours: 0, consecutiveEvents: 0 });
+
+        return {
+          name: country.name,
+          iso3: country.iso3,
+          ...totals,
+        };
+      })
+        .filter((row) => row.negativeHours > 0 || row.consecutiveEvents > 0)
+        .sort((a, b) => b.negativeHours - a.negativeHours || b.consecutiveEvents - a.consecutiveEvents);
+
+      worstList.innerHTML = "";
+      rows.forEach((row, index) => {
+        const item = document.createElement("div");
+        item.className = "country-row";
+        item.innerHTML = `
+          <div><strong>${index + 1}. ${row.name} (${row.iso3})</strong><span>${months[0]} to ${months[months.length - 1]}</span></div>
+          <div><strong>${row.negativeHours.toLocaleString("en")}</strong><span>negative hours</span></div>
+          <div><strong>${row.consecutiveEvents.toLocaleString("en")}</strong><span>days >= 6 consecutive hours</span></div>
+        `;
+        worstList.append(item);
+      });
+    }
+
     function boot(data) {
       dataset = data;
       populateCountries();
@@ -433,12 +462,14 @@
       });
       if (defaultCountry) countrySelect.value = defaultCountry.name;
       drawCountry(countrySelect.value);
+      renderWorstCountries(dataset);
     }
 
     if (window.NEGATIVE_PRICE_DATA) {
       boot(window.NEGATIVE_PRICE_DATA);
     } else {
       chartTitle.textContent = "Data file not found. Run scripts/build_negative_prices.py first.";
+      worstList.textContent = "Data file not found. Run scripts/build_negative_prices.py first.";
     }
 
     countrySelect.addEventListener("change", () => drawCountry(countrySelect.value));
