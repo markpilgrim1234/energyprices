@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Monthly Negative Prices</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f7f2;
+      --panel: #ffffff;
+      --ink: #18201c;
+      --muted: #667069;
+      --line: #d9dfd7;
+      --green: #1f8a70;
+      --blue: #2f66c5;
+      --orange: #d7832f;
+      --shadow: 0 12px 34px rgba(31, 44, 37, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 38px;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      margin-bottom: 18px;
+      color: var(--ink);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 48px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 650px;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(150px, 1fr));
+      gap: 12px;
+      min-width: min(460px, 100%);
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      font: inherit;
+      padding: 0 12px;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .stat {
+      min-height: 104px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 10px;
+      font-size: clamp(24px, 3vw, 36px);
+      line-height: 1;
+    }
+
+    .chart-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      padding: 18px;
+    }
+
+    .chart-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .legend span {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .key {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      background: var(--green);
+    }
+
+    .key.cumulative {
+      background: var(--blue);
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-height: 420px;
+    }
+
+    .axis,
+    .grid {
+      stroke: var(--line);
+      stroke-width: 1;
+    }
+
+    .axis-label,
+    .tick {
+      fill: var(--muted);
+      font-size: 12px;
+    }
+
+    .empty {
+      fill: var(--muted);
+      font-size: 18px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .bar {
+      fill: var(--green);
+    }
+
+    .area {
+      fill: rgba(47, 102, 197, 0.18);
+      stroke: var(--blue);
+      stroke-width: 2;
+    }
+
+    .point {
+      fill: var(--orange);
+    }
+
+    @media (max-width: 860px) {
+      header {
+        display: grid;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 560px) {
+      main {
+        width: min(100vw - 20px, 1180px);
+        padding-top: 18px;
+      }
+
+      .controls,
+      .stats {
+        grid-template-columns: 1fr;
+      }
+
+      .chart-panel {
+        padding: 12px;
+      }
+
+      svg {
+        min-height: 360px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back-link" href="index.html">Back to home</a>
+    <header>
+      <div>
+        <h1>Monthly Negative Prices</h1>
+        <p class="subtitle">Daily count of negative hourly prices by country and month, with a cumulative area showing how the impact builds through the month.</p>
+      </div>
+      <div class="controls">
+        <label>
+          Country
+          <select id="countrySelect"></select>
+        </label>
+        <label>
+          Year
+          <select id="yearSelect"></select>
+        </label>
+        <label>
+          Month
+          <select id="monthSelect"></select>
+        </label>
+      </div>
+    </header>
+
+    <section class="stats" aria-live="polite">
+      <div class="stat">
+        <span>Negative prices</span>
+        <strong id="totalNegative">0</strong>
+      </div>
+      <div class="stat">
+        <span>Days affected</span>
+        <strong id="daysAffected">0</strong>
+      </div>
+      <div class="stat">
+        <span>Worst day</span>
+        <strong id="worstDay">-</strong>
+      </div>
+      <div class="stat">
+        <span>Max daily count</span>
+        <strong id="maxDaily">0</strong>
+      </div>
+    </section>
+
+    <section class="chart-panel">
+      <div class="chart-head">
+        <div id="chartTitle">Loading data...</div>
+        <div class="legend">
+          <span><i class="key"></i> Daily negatives</span>
+          <span><i class="key cumulative"></i> Cumulative impact</span>
+        </div>
+      </div>
+      <svg id="chart" viewBox="0 0 1100 520" role="img" aria-labelledby="chartTitle"></svg>
+    </section>
+  </main>
+
+  <script src="data/negative_prices.js"></script>
+  <script>
+    const countrySelect = document.querySelector("#countrySelect");
+    const yearSelect = document.querySelector("#yearSelect");
+    const monthSelect = document.querySelector("#monthSelect");
+    const totalNegative = document.querySelector("#totalNegative");
+    const daysAffected = document.querySelector("#daysAffected");
+    const worstDay = document.querySelector("#worstDay");
+    const maxDaily = document.querySelector("#maxDaily");
+    const chartTitle = document.querySelector("#chartTitle");
+    const chart = document.querySelector("#chart");
+
+    let dataset;
+
+    const formatMonth = (key) => {
+      const [year, month] = key.split("-").map(Number);
+      return new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
+    };
+
+    const el = (name, attrs = {}, text = "") => {
+      const node = document.createElementNS("http://www.w3.org/2000/svg", name);
+      Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+      if (text) node.textContent = text;
+      return node;
+    };
+
+    function populateCountries() {
+      countrySelect.innerHTML = "";
+      dataset.countries.forEach((country) => {
+        const option = document.createElement("option");
+        option.value = country.name;
+        option.textContent = `${country.name} (${country.iso3})`;
+        countrySelect.append(option);
+      });
+    }
+
+    function countryYears(countryName) {
+      const country = dataset.countries.find((item) => item.name === countryName);
+      return [...new Set(country.months.map((month) => month.slice(0, 4)))].sort().reverse();
+    }
+
+    function populateYears(countryName) {
+      yearSelect.innerHTML = "";
+      countryYears(countryName).forEach((year) => {
+        const option = document.createElement("option");
+        option.value = year;
+        option.textContent = year;
+        yearSelect.append(option);
+      });
+    }
+
+    function populateMonths(countryName, year) {
+      const country = dataset.countries.find((item) => item.name === countryName);
+      monthSelect.innerHTML = "";
+      country.months
+        .filter((month) => month.startsWith(`${year}-`))
+        .slice()
+        .forEach((month) => {
+        const option = document.createElement("option");
+        option.value = month;
+        option.textContent = formatMonth(month).replace(` ${year}`, "");
+        monthSelect.append(option);
+      });
+    }
+
+    function drawChart(countryName, monthKey) {
+      const monthData = dataset.series[countryName][monthKey];
+      const days = monthData.days;
+      const maxCount = Math.max(1, ...days.map((item) => item.negativePrices));
+      const maxCumulative = Math.max(1, ...days.map((item) => item.cumulativeNegativePrices));
+      const worst = days.reduce((best, item) => item.negativePrices > best.negativePrices ? item : best, days[0]);
+
+      totalNegative.textContent = monthData.totalNegativePrices.toLocaleString("en");
+      daysAffected.textContent = monthData.daysWithNegativePrices.toLocaleString("en");
+      worstDay.textContent = worst.negativePrices > 0 ? `Day ${worst.day}` : "-";
+      maxDaily.textContent = worst.negativePrices.toLocaleString("en");
+      chartTitle.textContent = `${countryName}, ${formatMonth(monthKey)}`;
+
+      chart.innerHTML = "";
+
+      const width = 1100;
+      const height = 520;
+      const margin = { top: 26, right: 56, bottom: 58, left: 58 };
+      const innerWidth = width - margin.left - margin.right;
+      const innerHeight = height - margin.top - margin.bottom;
+      const baseY = margin.top + innerHeight;
+      const xStep = innerWidth / days.length;
+      const barWidth = Math.max(10, xStep * 0.58);
+      const x = (index) => margin.left + xStep * index + xStep / 2;
+      const yCount = (value) => baseY - (value / maxCount) * innerHeight;
+      const yCumulative = (value) => baseY - (value / maxCumulative) * innerHeight;
+
+      for (let i = 0; i <= 4; i += 1) {
+        const y = margin.top + (innerHeight / 4) * i;
+        chart.append(el("line", { class: "grid", x1: margin.left, y1: y, x2: width - margin.right, y2: y }));
+        const value = Math.round(maxCount - (maxCount / 4) * i);
+        chart.append(el("text", { class: "tick", x: 18, y: y + 4 }, value.toString()));
+      }
+
+      chart.append(el("line", { class: "axis", x1: margin.left, y1: baseY, x2: width - margin.right, y2: baseY }));
+      chart.append(el("line", { class: "axis", x1: margin.left, y1: margin.top, x2: margin.left, y2: baseY }));
+
+      const areaPoints = days.map((item, index) => `${x(index)},${yCumulative(item.cumulativeNegativePrices)}`).join(" ");
+      const areaPath = `${margin.left},${baseY} ${areaPoints} ${width - margin.right},${baseY}`;
+      chart.append(el("polygon", { class: "area", points: areaPath }));
+
+      days.forEach((item, index) => {
+        const barHeight = baseY - yCount(item.negativePrices);
+        chart.append(el("rect", {
+          class: "bar",
+          x: x(index) - barWidth / 2,
+          y: yCount(item.negativePrices),
+          width: barWidth,
+          height: barHeight,
+          rx: 3,
+        }));
+
+        if (item.negativePrices > 0) {
+          chart.append(el("circle", { class: "point", cx: x(index), cy: yCount(item.negativePrices), r: 4 }));
+        }
+
+        if (item.day === 1 || item.day % 5 === 0 || item.day === days.length) {
+          chart.append(el("text", { class: "tick", x: x(index), y: baseY + 28, "text-anchor": "middle" }, item.day.toString()));
+        }
+      });
+
+      chart.append(el("text", { class: "axis-label", x: margin.left, y: height - 16 }, "Day of month"));
+      chart.append(el("text", { class: "axis-label", x: 16, y: margin.top - 8 }, "Daily negative prices"));
+
+      if (monthData.totalNegativePrices === 0) {
+        chart.append(el("text", { class: "empty", x: width / 2, y: height / 2 }, "No negative prices in this month"));
+      }
+    }
+
+    function render() {
+      drawChart(countrySelect.value, monthSelect.value);
+    }
+
+    function boot(data) {
+        dataset = data;
+        populateCountries();
+        const firstCountryWithNegatives = dataset.countries.find((country) => {
+          return country.months.some((month) => dataset.series[country.name][month].totalNegativePrices > 0);
+        });
+        if (firstCountryWithNegatives) countrySelect.value = firstCountryWithNegatives.name;
+        populateYears(countrySelect.value);
+        yearSelect.value = countryYears(countrySelect.value)[0];
+        populateMonths(countrySelect.value, yearSelect.value);
+        const recentActiveMonth = [...monthSelect.options].find((option) => {
+          return dataset.series[countrySelect.value][option.value].totalNegativePrices > 0;
+        });
+        if (recentActiveMonth) monthSelect.value = recentActiveMonth.value;
+        render();
+    }
+
+    if (window.NEGATIVE_PRICE_DATA) {
+      boot(window.NEGATIVE_PRICE_DATA);
+    } else {
+      chartTitle.textContent = "Data file not found. Run scripts/build_negative_prices.py first.";
+    }
+
+    countrySelect.addEventListener("change", () => {
+      populateYears(countrySelect.value);
+      populateMonths(countrySelect.value, yearSelect.value);
+      const activeMonth = [...monthSelect.options].find((option) => {
+        return dataset.series[countrySelect.value][option.value].totalNegativePrices > 0;
+      });
+      if (activeMonth) monthSelect.value = activeMonth.value;
+      render();
+    });
+
+    yearSelect.addEventListener("change", () => {
+      populateMonths(countrySelect.value, yearSelect.value);
+      render();
+    });
+
+    monthSelect.addEventListener("change", render);
+  </script>
+</body>
+</html>

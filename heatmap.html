@@ -1,0 +1,389 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Heatmap</title>
+  <style>
+    :root {
+      --bg: #f6f7f2;
+      --panel: #ffffff;
+      --ink: #18201c;
+      --muted: #667069;
+      --line: #d9dfd7;
+      --red: #c83f3f;
+      --shadow: 0 12px 34px rgba(31, 44, 37, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1280px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 38px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      margin-bottom: 18px;
+      color: var(--ink);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 48px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 680px;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      min-width: min(320px, 100%);
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      font: inherit;
+      padding: 0 12px;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .stat,
+    .heatmap-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .stat {
+      min-height: 96px;
+      padding: 16px;
+    }
+
+    .stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 10px;
+      font-size: clamp(24px, 3vw, 36px);
+      line-height: 1;
+    }
+
+    .heatmap-panel {
+      padding: 18px;
+      overflow: hidden;
+    }
+
+    .heatmap-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .scale {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      white-space: nowrap;
+    }
+
+    .scale-bar {
+      width: 130px;
+      height: 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: linear-gradient(90deg, #eeeeee, #f1b0a9, var(--red));
+    }
+
+    .heatmap-wrap {
+      overflow: auto;
+      padding-bottom: 8px;
+    }
+
+    .heatmap-grid {
+      display: grid;
+      gap: 2px;
+      align-items: stretch;
+      width: max-content;
+      min-width: 100%;
+    }
+
+    .cell,
+    .hour-label,
+    .month-label {
+      min-width: 30px;
+      height: 24px;
+      border-radius: 3px;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+    }
+
+    .corner,
+    .hour-label,
+    .month-label {
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .corner {
+      position: sticky;
+      left: 0;
+      z-index: 3;
+      min-width: 54px;
+      height: 64px;
+      display: grid;
+      place-items: end center;
+      background: var(--panel);
+      border-radius: 3px;
+      font-size: 11px;
+    }
+
+    .hour-label {
+      position: sticky;
+      left: 0;
+      z-index: 2;
+      min-width: 54px;
+      background: var(--panel);
+    }
+
+    .month-label {
+      height: 64px;
+      writing-mode: vertical-rl;
+      transform: rotate(180deg);
+      justify-content: end;
+      padding: 4px 0;
+    }
+
+    .cell {
+      border: 1px solid rgba(24, 32, 28, 0.04);
+      color: transparent;
+    }
+
+    .cell:hover {
+      outline: 2px solid var(--ink);
+      outline-offset: -1px;
+      color: var(--ink);
+      font-weight: 800;
+    }
+
+    @media (max-width: 760px) {
+      header {
+        display: grid;
+      }
+
+      .summary {
+        grid-template-columns: 1fr;
+      }
+
+      .heatmap-panel {
+        padding: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back-link" href="index.html">Back to home</a>
+    <header>
+      <div>
+        <h1>Heatmap</h1>
+        <p class="subtitle">Negative price counts by month and hour of day. Darker red means more negative price hours in that month-hour slot.</p>
+      </div>
+      <label>
+        Country
+        <select id="countrySelect"></select>
+      </label>
+    </header>
+
+    <section class="summary" aria-live="polite">
+      <div class="stat">
+        <span>Total negative hours</span>
+        <strong id="totalNegative">0</strong>
+      </div>
+      <div class="stat">
+        <span>Peak month-hour</span>
+        <strong id="peakSlot">-</strong>
+      </div>
+      <div class="stat">
+        <span>Peak count</span>
+        <strong id="peakCount">0</strong>
+      </div>
+    </section>
+
+    <section class="heatmap-panel">
+      <div class="heatmap-head">
+        <div id="heatmapTitle">Loading data...</div>
+        <div class="scale"><span>Low</span><i class="scale-bar"></i><span>High</span></div>
+      </div>
+      <div class="heatmap-wrap">
+        <div id="heatmapGrid" class="heatmap-grid"></div>
+      </div>
+    </section>
+  </main>
+
+  <script src="data/negative_prices.js"></script>
+  <script>
+    const countrySelect = document.querySelector("#countrySelect");
+    const heatmapTitle = document.querySelector("#heatmapTitle");
+    const heatmapGrid = document.querySelector("#heatmapGrid");
+    const totalNegative = document.querySelector("#totalNegative");
+    const peakSlot = document.querySelector("#peakSlot");
+    const peakCount = document.querySelector("#peakCount");
+    let dataset;
+
+    const formatMonth = (key) => {
+      const [year, month] = key.split("-").map(Number);
+      return new Intl.DateTimeFormat("en", { month: "short", year: "2-digit" }).format(new Date(year, month - 1, 1));
+    };
+
+    function colorFor(value, max) {
+      if (value <= 0 || max <= 0) return "#eeeeee";
+      const intensity = Math.pow(value / max, 0.72);
+      const start = [238, 238, 238];
+      const end = [200, 63, 63];
+      const rgb = start.map((channel, index) => Math.round(channel + (end[index] - channel) * intensity));
+      return `rgb(${rgb.join(", ")})`;
+    }
+
+    function populateCountries() {
+      countrySelect.innerHTML = "";
+      dataset.countries.forEach((country) => {
+        const option = document.createElement("option");
+        option.value = country.name;
+        option.textContent = `${country.name} (${country.iso3})`;
+        countrySelect.append(option);
+      });
+    }
+
+    function drawHeatmap(countryName) {
+      const months = Object.keys(dataset.series[countryName]).sort();
+      const values = months.map((month) => dataset.series[countryName][month].hourlyNegativePrices || Array(24).fill(0));
+      const flatValues = values.flat();
+      const max = Math.max(0, ...flatValues);
+      const total = flatValues.reduce((sum, value) => sum + value, 0);
+      let best = { month: "-", hour: "-", value: 0 };
+
+      values.forEach((hours, monthIndex) => {
+        hours.forEach((value, hour) => {
+          if (value > best.value) {
+            best = { month: months[monthIndex], hour, value };
+          }
+        });
+      });
+
+      totalNegative.textContent = total.toLocaleString("en");
+      peakSlot.textContent = best.value > 0 ? `${formatMonth(best.month)} ${String(best.hour).padStart(2, "0")}:00` : "-";
+      peakCount.textContent = best.value.toLocaleString("en");
+      heatmapTitle.textContent = `${countryName}: ${months.length.toLocaleString("en")} months x 24 hours`;
+
+      heatmapGrid.innerHTML = "";
+      heatmapGrid.style.gridTemplateColumns = `54px repeat(${months.length}, 30px)`;
+
+      const corner = document.createElement("div");
+      corner.className = "corner";
+      corner.textContent = "Hour";
+      heatmapGrid.append(corner);
+
+      months.forEach((month) => {
+        const label = document.createElement("div");
+        label.className = "month-label";
+        label.textContent = formatMonth(month);
+        heatmapGrid.append(label);
+      });
+
+      for (let hour = 0; hour < 24; hour += 1) {
+        const hourLabel = document.createElement("div");
+        hourLabel.className = "hour-label";
+        hourLabel.textContent = `${String(hour).padStart(2, "0")}:00`;
+        heatmapGrid.append(hourLabel);
+
+        months.forEach((month, monthIndex) => {
+          const value = values[monthIndex][hour];
+          const cell = document.createElement("div");
+          cell.className = "cell";
+          cell.style.background = colorFor(value, max);
+          cell.title = `${countryName}, ${formatMonth(month)}, ${String(hour).padStart(2, "0")}:00 - ${value} negative prices`;
+          cell.textContent = value;
+          heatmapGrid.append(cell);
+        });
+      }
+    }
+
+    function boot(data) {
+      dataset = data;
+      populateCountries();
+      const defaultCountry = dataset.countries.find((country) => {
+        return country.months.some((month) => dataset.series[country.name][month].totalNegativePrices > 0);
+      });
+      if (defaultCountry) countrySelect.value = defaultCountry.name;
+      drawHeatmap(countrySelect.value);
+    }
+
+    if (window.NEGATIVE_PRICE_DATA) {
+      boot(window.NEGATIVE_PRICE_DATA);
+    } else {
+      heatmapTitle.textContent = "Data file not found. Run scripts/build_negative_prices.py first.";
+    }
+
+    countrySelect.addEventListener("change", () => drawHeatmap(countrySelect.value));
+  </script>
+</body>
+</html>
