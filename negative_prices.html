@@ -72,7 +72,8 @@
       gap: 14px;
     }
 
-    .nav a {
+    .nav a,
+    .nav-card {
       min-height: 150px;
       display: grid;
       align-content: space-between;
@@ -86,12 +87,14 @@
       box-shadow: var(--shadow);
     }
 
-    .nav a strong {
+    .nav a strong,
+    .nav-card strong {
       font-size: 24px;
       line-height: 1.15;
     }
 
-    .nav a span {
+    .nav a span,
+    .nav-card span {
       color: var(--muted);
       line-height: 1.45;
     }
@@ -182,16 +185,16 @@
       </a>
       <a href="monthly_negative_prices.html">
         <strong>Monthly negative prices</strong>
-        <span>Choose country, year, and month to see daily negative price hours building through the month.</span>
+        <span>Choose country, year, and month to see daily negative price hours and continuous negative price runs.</span>
       </a>
       <a href="by_country_negative_prices.html">
         <strong>By country negative prices</strong>
         <span>Choose one country and compare cumulative monthly negative hours across the latest five years.</span>
       </a>
-      <a href="continuous_negative_prices.html">
-        <strong>Continuous negative prices</strong>
-        <span>Choose country, year, and month to see daily runs of consecutive negative price hours.</span>
-      </a>
+      <div class="nav-card">
+        <strong>Renewable generation impacted by neg prices</strong>
+        <span>Placeholder for renewable generation exposure to negative price events.</span>
+      </div>
     </nav>
 
     <footer style="margin-top: 28px; color: #667069; font-size: 13px;">Source: Entsoe</footer>

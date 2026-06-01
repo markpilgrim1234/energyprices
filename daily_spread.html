@@ -68,7 +68,7 @@
 
     .controls {
       display: grid;
-      grid-template-columns: repeat(4, minmax(130px, 1fr));
+      grid-template-columns: repeat(2, minmax(130px, 1fr));
       gap: 12px;
       min-width: min(640px, 100%);
     }
@@ -213,14 +213,6 @@
           <select id="countrySelect"></select>
         </label>
         <label>
-          Year
-          <select id="yearSelect"></select>
-        </label>
-        <label>
-          Month
-          <select id="monthSelect"></select>
-        </label>
-        <label>
           Granularity
           <select id="granularitySelect">
             <option value="day">Day</option>
@@ -257,8 +249,6 @@
   <script src="data/spot_prices.js"></script>
   <script>
     const countrySelect = document.querySelector("#countrySelect");
-    const yearSelect = document.querySelector("#yearSelect");
-    const monthSelect = document.querySelector("#monthSelect");
     const granularitySelect = document.querySelector("#granularitySelect");
     const chartTitle = document.querySelector("#chartTitle");
     const chart = document.querySelector("#chart");
@@ -292,46 +282,25 @@
       return dataset.countries.find((country) => country.name === countryName).years;
     }
 
-    function populateYears(countryName) {
-      yearSelect.innerHTML = "";
-      countryYears(countryName).slice().reverse().forEach((year) => {
-        const option = document.createElement("option");
-        option.value = year;
-        option.textContent = year;
-        yearSelect.append(option);
-      });
-    }
-
-    function populateMonths(countryName, year) {
-      monthSelect.innerHTML = "";
-      const months = Object.keys(dataset.series[countryName].years[year].months).sort();
-      months.forEach((month) => {
-        const option = document.createElement("option");
-        option.value = month;
-        option.textContent = formatMonth(month).replace(` ${year}`, "");
-        monthSelect.append(option);
-      });
-    }
-
     function selectedRows() {
       const country = countrySelect.value;
-      const year = yearSelect.value;
-      const month = monthSelect.value;
       const granularity = granularitySelect.value;
       const countryData = dataset.series[country].years;
+      const latestYear = countryYears(country).at(-1);
+      const latestMonth = Object.keys(countryData[latestYear].months).sort().at(-1);
 
       if (granularity === "day") {
-        return countryData[year].months[month].days
+        return countryData[latestYear].months[latestMonth].days
           .filter((item) => item.observations > 0)
           .map((item) => ({
-            label: `Day ${item.day}`,
+            label: String(item.day),
             value: item.dailySpread,
             observations: item.observations,
           }));
       }
 
       if (granularity === "month") {
-        return Object.entries(countryData[year].months)
+        return Object.entries(countryData[latestYear].months)
           .sort(([left], [right]) => left.localeCompare(right))
           .map(([monthKey, item]) => ({
             label: formatMonth(monthKey, "short"),
@@ -347,12 +316,6 @@
           value: item.averageDailySpread,
           observations: item.observations,
         }));
-    }
-
-    function updateControlState() {
-      const granularity = granularitySelect.value;
-      yearSelect.disabled = granularity === "year";
-      monthSelect.disabled = granularity !== "day";
     }
 
     function drawChart(rows) {
@@ -434,7 +397,6 @@
     }
 
     function render() {
-      updateControlState();
       const rows = selectedRows();
       const values = rows.map((row) => row.value).filter((value) => value !== null);
       chartTitle.textContent = `${countrySelect.value}: daily price spread by ${granularitySelect.value}`;
@@ -447,9 +409,6 @@
       populateCountries();
       const germany = dataset.countries.find((country) => country.name === "Germany");
       if (germany) countrySelect.value = germany.name;
-      populateYears(countrySelect.value);
-      yearSelect.value = countryYears(countrySelect.value).at(-1);
-      populateMonths(countrySelect.value, yearSelect.value);
       render();
     }
 
@@ -460,18 +419,8 @@
     }
 
     countrySelect.addEventListener("change", () => {
-      populateYears(countrySelect.value);
-      yearSelect.value = countryYears(countrySelect.value).at(-1);
-      populateMonths(countrySelect.value, yearSelect.value);
       render();
     });
-
-    yearSelect.addEventListener("change", () => {
-      populateMonths(countrySelect.value, yearSelect.value);
-      render();
-    });
-
-    monthSelect.addEventListener("change", render);
     granularitySelect.addEventListener("change", render);
   </script>
 </body>

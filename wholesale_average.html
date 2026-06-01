@@ -324,7 +324,7 @@
         return countryData[year].months[month].days
           .filter((item) => item.observations > 0)
           .map((item) => ({
-            label: `Day ${item.day}`,
+            label: String(item.day),
             value: item.averagePrice,
             observations: item.observations,
           }));

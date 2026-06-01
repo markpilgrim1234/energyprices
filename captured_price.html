@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Captured Price</title>
+  <title>Captured prices &amp; rates</title>
   <style>
     :root {
       --bg: #f6f7f2;
@@ -204,7 +204,7 @@
     <a class="back-link" href="spot_prices.html">&lt;-- Back to spot prices</a>
     <header>
       <div>
-        <h1>Captured Price</h1>
+        <h1>Captured prices &amp; rates</h1>
         <p class="subtitle">Synthetic generation profiles weighted against hourly wholesale prices.</p>
       </div>
       <div class="controls">
@@ -229,25 +229,11 @@
           <select id="viewSelect">
             <option value="hourly">Hourly profile</option>
             <option value="monthly">Monthly trend</option>
+            <option value="monthly_rate">Monthly captured rate</option>
           </select>
         </label>
       </div>
     </header>
-
-    <section class="stats">
-      <div class="stat">
-        <span>Captured price</span>
-        <strong id="capturedStat">-</strong>
-      </div>
-      <div class="stat">
-        <span>Baseload average</span>
-        <strong id="baseloadStat">-</strong>
-      </div>
-      <div class="stat">
-        <span>Capture rate</span>
-        <strong id="captureRateStat">-</strong>
-      </div>
-    </section>
 
     <section class="chart-panel">
       <div class="chart-head">
@@ -274,9 +260,6 @@
     const monthSelect = document.querySelector("#monthSelect");
     const technologySelect = document.querySelector("#technologySelect");
     const viewSelect = document.querySelector("#viewSelect");
-    const capturedStat = document.querySelector("#capturedStat");
-    const baseloadStat = document.querySelector("#baseloadStat");
-    const captureRateStat = document.querySelector("#captureRateStat");
     const chartTitle = document.querySelector("#chartTitle");
     const chart = document.querySelector("#chart");
     const legend = document.querySelector("#legend");
@@ -398,12 +381,6 @@
       });
     }
 
-    function setStats(captured, baseload) {
-      capturedStat.textContent = `${fmtPrice(captured)} EUR/MWh`;
-      baseloadStat.textContent = `${fmtPrice(baseload)} EUR/MWh`;
-      captureRateStat.textContent = fmtRate(baseload ? captured / baseload : null);
-    }
-
     function drawAxes(width, height, margin, maxValue, yLabel) {
       const innerHeight = height - margin.top - margin.bottom;
       const baseY = margin.top + innerHeight;
@@ -425,7 +402,6 @@
       const weights = profileFor(monthSelect.value);
       const captured = capturedForMonth(monthData, weights);
       const baseload = monthData.averagePrice;
-      setStats(captured, baseload);
       chartTitle.textContent = `${countrySelect.value}: hourly profile, ${monthLabel(monthSelect.value)}`;
       legend.innerHTML = `<span><i class="swatch" style="background: var(--dark)"></i>Generation weight</span><span><i class="swatch" style="background: var(--green)"></i>Average price</span>`;
       chart.innerHTML = "";
@@ -470,7 +446,6 @@
       const rows = monthlyRows();
       const valid = rows.filter((row) => row.captured !== null && row.baseload !== null);
       const selected = rows.find((row) => row.monthKey === monthSelect.value) || valid[valid.length - 1];
-      setStats(selected ? selected.captured : null, selected ? selected.baseload : null);
       chartTitle.textContent = `${countrySelect.value}: monthly captured price, ${yearSelect.value}`;
       legend.innerHTML = `<span><i class="swatch" style="background: var(--dark)"></i>Captured price</span><span><i class="swatch" style="background: #a9b1ab"></i>Baseload average</span>`;
       chart.innerHTML = "";
@@ -506,10 +481,48 @@
       `).join("");
     }
 
+    function drawMonthlyRate() {
+      const rows = monthlyRows();
+      chartTitle.textContent = `${countrySelect.value}: monthly captured rate, ${yearSelect.value}`;
+      legend.innerHTML = `<span><i class="swatch" style="background: var(--green)"></i>Captured rate</span>`;
+      chart.innerHTML = "";
+
+      const width = 1100;
+      const height = 520;
+      const margin = { top: 42, right: 42, bottom: 62, left: 64 };
+      const innerWidth = width - margin.left - margin.right;
+      const innerHeight = height - margin.top - margin.bottom;
+      const maxValue = Math.max(1, ...rows.map((row) => row.captureRate || 0));
+      const baseY = drawAxes(width, height, margin, maxValue * 100, "%");
+      const slot = innerWidth / Math.max(1, rows.length);
+      const barWidth = slot * 0.54;
+
+      rows.forEach((row, index) => {
+        const x = margin.left + index * slot + (slot - barWidth) / 2;
+        const value = row.captureRate === null ? 0 : row.captureRate * 100;
+        const barHeight = (value / (maxValue * 100)) * innerHeight;
+        chart.append(el("rect", { class: "bar", x, y: baseY - barHeight, width: barWidth, height: barHeight, rx: 3 }));
+        chart.append(el("text", { class: "tick", x: margin.left + index * slot + slot / 2, y: height - 28, "text-anchor": "middle" }, row.label));
+      });
+      chart.append(el("text", { class: "axis-label", x: margin.left, y: height - 12 }, "Month"));
+
+      tableHead.innerHTML = "<tr><th>Month</th><th>Captured rate</th><th>Captured price</th><th>Baseload average</th></tr>";
+      tableBody.innerHTML = rows.map((row) => `
+        <tr>
+          <td>${monthLabel(row.monthKey)}</td>
+          <td>${fmtRate(row.captureRate)}</td>
+          <td>${fmtPrice(row.captured)}</td>
+          <td>${fmtPrice(row.baseload)}</td>
+        </tr>
+      `).join("");
+    }
+
     function render() {
-      monthSelect.disabled = viewSelect.value === "monthly";
+      monthSelect.disabled = viewSelect.value !== "hourly";
       if (viewSelect.value === "monthly") {
         drawMonthly();
+      } else if (viewSelect.value === "monthly_rate") {
+        drawMonthlyRate();
       } else {
         drawHourly();
       }

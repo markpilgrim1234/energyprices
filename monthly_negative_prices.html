@@ -15,6 +15,9 @@
       --green: #1f8a70;
       --blue: #2f66c5;
       --orange: #d7832f;
+      --red: #c83f3f;
+      --dark: #4a4f4b;
+      --light: #cfd5d0;
       --shadow: 0 12px 34px rgba(31, 44, 37, 0.1);
     }
 
@@ -71,9 +74,9 @@
 
     .controls {
       display: grid;
-      grid-template-columns: repeat(3, minmax(150px, 1fr));
+      grid-template-columns: repeat(4, minmax(150px, 1fr));
       gap: 12px;
-      min-width: min(460px, 100%);
+      min-width: min(640px, 100%);
     }
 
     label {
@@ -169,6 +172,18 @@
       background: var(--blue);
     }
 
+    .key.consecutive {
+      background: var(--dark);
+    }
+
+    .key.limit {
+      background: var(--red);
+    }
+
+    .key.single {
+      background: var(--light);
+    }
+
     svg {
       display: block;
       width: 100%;
@@ -209,6 +224,30 @@
       fill: var(--orange);
     }
 
+    .bar.consecutive {
+      fill: var(--dark);
+    }
+
+    .bar.limit {
+      fill: var(--red);
+    }
+
+    .bar.other {
+      fill: var(--light);
+    }
+
+    .limit-line {
+      stroke: var(--red);
+      stroke-width: 3;
+      stroke-dasharray: 8 7;
+    }
+
+    .limit-label {
+      fill: var(--red);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
     @media (max-width: 860px) {
       header {
         display: grid;
@@ -246,7 +285,7 @@
     <header>
       <div>
         <h1>Monthly Negative Prices</h1>
-        <p class="subtitle">Daily count of negative hourly prices by country and month, with a cumulative area showing how the impact builds through the month.</p>
+        <p class="subtitle">Daily count of negative hourly prices and continuous negative price runs by country and month.</p>
       </div>
       <div class="controls">
         <label>
@@ -261,24 +300,31 @@
           Month
           <select id="monthSelect"></select>
         </label>
+        <label>
+          Events
+          <select id="eventSelect">
+            <option value="all">All events</option>
+            <option value="continuous">Continuous</option>
+          </select>
+        </label>
       </div>
     </header>
 
     <section class="stats" aria-live="polite">
       <div class="stat">
-        <span>Negative prices</span>
+        <span id="statLabel1">Negative prices</span>
         <strong id="totalNegative">0</strong>
       </div>
       <div class="stat">
-        <span>Days affected</span>
+        <span id="statLabel2">Days affected</span>
         <strong id="daysAffected">0</strong>
       </div>
       <div class="stat">
-        <span>Worst day</span>
+        <span id="statLabel3">Worst day</span>
         <strong id="worstDay">-</strong>
       </div>
       <div class="stat">
-        <span>Max daily count</span>
+        <span id="statLabel4">Max daily count</span>
         <strong id="maxDaily">0</strong>
       </div>
     </section>
@@ -286,7 +332,7 @@
     <section class="chart-panel">
       <div class="chart-head">
         <div id="chartTitle">Loading data...</div>
-        <div class="legend">
+        <div class="legend" id="legend">
           <span><i class="key"></i> Daily negatives</span>
           <span><i class="key cumulative"></i> Cumulative impact</span>
         </div>
@@ -301,12 +347,19 @@
     const countrySelect = document.querySelector("#countrySelect");
     const yearSelect = document.querySelector("#yearSelect");
     const monthSelect = document.querySelector("#monthSelect");
+    const eventSelect = document.querySelector("#eventSelect");
+    const statLabel1 = document.querySelector("#statLabel1");
+    const statLabel2 = document.querySelector("#statLabel2");
+    const statLabel3 = document.querySelector("#statLabel3");
+    const statLabel4 = document.querySelector("#statLabel4");
     const totalNegative = document.querySelector("#totalNegative");
     const daysAffected = document.querySelector("#daysAffected");
     const worstDay = document.querySelector("#worstDay");
     const maxDaily = document.querySelector("#maxDaily");
     const chartTitle = document.querySelector("#chartTitle");
+    const legend = document.querySelector("#legend");
     const chart = document.querySelector("#chart");
+    const threshold = 6;
 
     let dataset;
 
@@ -368,11 +421,16 @@
       const maxCumulative = Math.max(1, ...days.map((item) => item.cumulativeNegativePrices));
       const worst = days.reduce((best, item) => item.negativePrices > best.negativePrices ? item : best, days[0]);
 
+      statLabel1.textContent = "Negative prices";
+      statLabel2.textContent = "Days affected";
+      statLabel3.textContent = "Worst day";
+      statLabel4.textContent = "Max daily count";
       totalNegative.textContent = monthData.totalNegativePrices.toLocaleString("en");
       daysAffected.textContent = monthData.daysWithNegativePrices.toLocaleString("en");
       worstDay.textContent = worst.negativePrices > 0 ? `Day ${worst.day}` : "-";
       maxDaily.textContent = worst.negativePrices.toLocaleString("en");
       chartTitle.textContent = `${countryName}, ${formatMonth(monthKey)}`;
+      legend.innerHTML = `<span><i class="key"></i> Daily negatives</span><span><i class="key cumulative"></i> Cumulative impact</span>`;
 
       chart.innerHTML = "";
 
@@ -430,8 +488,83 @@
       }
     }
 
+    function drawContinuousChart(countryName, monthKey) {
+      const monthData = dataset.series[countryName][monthKey];
+      const days = monthData.days;
+      const worst = days.reduce((best, item) => item.maxConsecutiveNegativePrices > best.maxConsecutiveNegativePrices ? item : best, days[0]);
+      const overLimit = days.filter((item) => item.maxConsecutiveNegativePrices >= threshold).length;
+      const maxValue = Math.max(threshold, 1, ...days.map((item) => item.negativePrices));
+
+      statLabel1.textContent = "Max consecutive hours";
+      statLabel2.textContent = "Days above 6";
+      statLabel3.textContent = "Worst day";
+      statLabel4.textContent = "Negative price hours";
+      totalNegative.textContent = worst.maxConsecutiveNegativePrices.toLocaleString("en");
+      daysAffected.textContent = overLimit.toLocaleString("en");
+      worstDay.textContent = worst.maxConsecutiveNegativePrices > 0 ? `Day ${worst.day}` : "-";
+      maxDaily.textContent = monthData.totalNegativePrices.toLocaleString("en");
+      chartTitle.textContent = `${countryName}, ${formatMonth(monthKey)}: continuous negative prices`;
+      legend.innerHTML = `<span><i class="key consecutive"></i> Consecutive negative hours</span><span><i class="key single"></i> Other negative hours</span><span><i class="key limit"></i> 6 hour threshold</span>`;
+
+      chart.innerHTML = "";
+
+      const width = 1100;
+      const height = 520;
+      const margin = { top: 26, right: 56, bottom: 58, left: 58 };
+      const innerWidth = width - margin.left - margin.right;
+      const innerHeight = height - margin.top - margin.bottom;
+      const baseY = margin.top + innerHeight;
+      const xStep = innerWidth / days.length;
+      const barWidth = Math.max(10, xStep * 0.58);
+      const x = (index) => margin.left + xStep * index + xStep / 2;
+      const y = (value) => baseY - (value / maxValue) * innerHeight;
+
+      for (let i = 0; i <= 4; i += 1) {
+        const gridY = margin.top + (innerHeight / 4) * i;
+        const value = Math.round(maxValue - (maxValue / 4) * i);
+        chart.append(el("line", { class: "grid", x1: margin.left, y1: gridY, x2: width - margin.right, y2: gridY }));
+        chart.append(el("text", { class: "tick", x: 18, y: gridY + 4 }, value.toString()));
+      }
+
+      chart.append(el("line", { class: "axis", x1: margin.left, y1: baseY, x2: width - margin.right, y2: baseY }));
+      chart.append(el("line", { class: "axis", x1: margin.left, y1: margin.top, x2: margin.left, y2: baseY }));
+      const thresholdY = y(threshold);
+      chart.append(el("line", { class: "limit-line", x1: margin.left, y1: thresholdY, x2: width - margin.right, y2: thresholdY }));
+      chart.append(el("text", { class: "limit-label", x: width - margin.right - 72, y: thresholdY - 8 }, "6 hours"));
+
+      days.forEach((item, index) => {
+        const total = item.negativePrices;
+        const consecutive = item.maxConsecutiveNegativePrices > 1 ? item.maxConsecutiveNegativePrices : 0;
+        const other = total - consecutive;
+        const baseClass = consecutive >= threshold ? "bar limit" : "bar consecutive";
+
+        if (consecutive > 0) {
+          chart.append(el("rect", { class: baseClass, x: x(index) - barWidth / 2, y: y(consecutive), width: barWidth, height: baseY - y(consecutive), rx: 3 }));
+        }
+
+        if (other > 0) {
+          chart.append(el("rect", { class: "bar other", x: x(index) - barWidth / 2, y: y(total), width: barWidth, height: y(consecutive) - y(total), rx: 3 }));
+        }
+
+        if (item.day === 1 || item.day % 5 === 0 || item.day === days.length) {
+          chart.append(el("text", { class: "tick", x: x(index), y: baseY + 28, "text-anchor": "middle" }, item.day.toString()));
+        }
+      });
+
+      chart.append(el("text", { class: "axis-label", x: margin.left, y: height - 16 }, "Day of month"));
+      chart.append(el("text", { class: "axis-label", x: 16, y: margin.top - 8 }, "Consecutive negative hours"));
+
+      if (monthData.maxConsecutiveNegativePrices === 0) {
+        chart.append(el("text", { class: "empty", x: width / 2, y: height / 2 }, "No consecutive negative prices in this month"));
+      }
+    }
+
     function render() {
-      drawChart(countrySelect.value, monthSelect.value);
+      if (eventSelect.value === "continuous") {
+        drawContinuousChart(countrySelect.value, monthSelect.value);
+      } else {
+        drawChart(countrySelect.value, monthSelect.value);
+      }
     }
 
     function boot(data) {
@@ -473,6 +606,7 @@
     });
 
     monthSelect.addEventListener("change", render);
+    eventSelect.addEventListener("change", render);
   </script>
 </body>
 </html>
