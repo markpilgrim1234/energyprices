@@ -68,9 +68,9 @@
 
     .controls {
       display: grid;
-      grid-template-columns: repeat(2, minmax(130px, 1fr));
+      grid-template-columns: repeat(5, minmax(130px, 1fr));
       gap: 12px;
-      min-width: min(640px, 100%);
+      min-width: min(980px, 100%);
     }
 
     label {
@@ -213,6 +213,21 @@
           <select id="countrySelect"></select>
         </label>
         <label>
+          Metric
+          <select id="metricSelect">
+            <option value="oneHourOneCycle">1h x1 cycle</option>
+            <option value="twoHourTwoCycles">2h x2 cycles</option>
+          </select>
+        </label>
+        <label>
+          Year
+          <select id="yearSelect"></select>
+        </label>
+        <label>
+          Month
+          <select id="monthSelect"></select>
+        </label>
+        <label>
           Granularity
           <select id="granularitySelect">
             <option value="day">Day</option>
@@ -236,7 +251,8 @@
         <thead>
           <tr>
             <th>Period</th>
-            <th>Daily spread</th>
+            <th class="col-one-hour">1h x1 cycle</th>
+            <th class="col-two-hour">2h x2 cycles</th>
             <th>Observations</th>
           </tr>
         </thead>
@@ -249,6 +265,9 @@
   <script src="data/spot_prices.js"></script>
   <script>
     const countrySelect = document.querySelector("#countrySelect");
+    const metricSelect = document.querySelector("#metricSelect");
+    const yearSelect = document.querySelector("#yearSelect");
+    const monthSelect = document.querySelector("#monthSelect");
     const granularitySelect = document.querySelector("#granularitySelect");
     const chartTitle = document.querySelector("#chartTitle");
     const chart = document.querySelector("#chart");
@@ -282,29 +301,59 @@
       return dataset.countries.find((country) => country.name === countryName).years;
     }
 
+    function populateYears(countryName) {
+      yearSelect.innerHTML = "";
+      countryYears(countryName).slice().reverse().forEach((year) => {
+        const option = document.createElement("option");
+        option.value = year;
+        option.textContent = year;
+        yearSelect.append(option);
+      });
+    }
+
+    function populateMonths(countryName, year) {
+      monthSelect.innerHTML = "";
+      const months = Object.keys(dataset.series[countryName].years[year].months).sort();
+      months.forEach((month) => {
+        const option = document.createElement("option");
+        option.value = month;
+        option.textContent = formatMonth(month).replace(` ${year}`, "");
+        monthSelect.append(option);
+      });
+    }
+
+    function updateControlState() {
+      const granularity = granularitySelect.value;
+      yearSelect.disabled = granularity === "year";
+      monthSelect.disabled = granularity !== "day";
+      metricSelect.disabled = false;
+    }
+
     function selectedRows() {
       const country = countrySelect.value;
       const granularity = granularitySelect.value;
       const countryData = dataset.series[country].years;
-      const latestYear = countryYears(country).at(-1);
-      const latestMonth = Object.keys(countryData[latestYear].months).sort().at(-1);
+      const year = yearSelect.value || countryYears(country).at(-1);
+      const month = monthSelect.value || Object.keys(countryData[year].months).sort().at(-1);
 
       if (granularity === "day") {
-        return countryData[latestYear].months[latestMonth].days
+        return countryData[year].months[month].days
           .filter((item) => item.observations > 0)
           .map((item) => ({
             label: String(item.day),
             value: item.dailySpread,
+            valueTwoCycle: item.dailySpreadTwoCycle2h,
             observations: item.observations,
           }));
       }
 
       if (granularity === "month") {
-        return Object.entries(countryData[latestYear].months)
+        return Object.entries(countryData[year].months)
           .sort(([left], [right]) => left.localeCompare(right))
           .map(([monthKey, item]) => ({
             label: formatMonth(monthKey, "short"),
             value: item.averageDailySpread,
+            valueTwoCycle: item.averageDailySpreadTwoCycle2h,
             observations: item.observations,
           }));
       }
@@ -314,6 +363,7 @@
         .map(([yearKey, item]) => ({
           label: yearKey,
           value: item.averageDailySpread,
+          valueTwoCycle: item.averageDailySpreadTwoCycle2h,
           observations: item.observations,
         }));
     }
@@ -325,7 +375,10 @@
       const margin = { top: 42, right: 34, bottom: 70, left: 64 };
       const innerWidth = width - margin.left - margin.right;
       const innerHeight = height - margin.top - margin.bottom;
-      const values = rows.map((row) => row.value).filter((value) => value !== null);
+      const metric = metricSelect.value;
+      const values = rows
+        .map((row) => (metric === "twoHourTwoCycles" ? row.valueTwoCycle : row.value))
+        .filter((value) => value !== null && value !== undefined);
       const minValue = Math.min(0, ...values);
       const maxValue = Math.max(1, ...values);
       const range = maxValue - minValue || 1;
@@ -346,12 +399,13 @@
       chart.append(el("line", { class: "zero-line", x1: margin.left, y1: y(0), x2: width - margin.right, y2: y(0) }));
 
       rows.forEach((row, index) => {
+        const value = metric === "twoHourTwoCycles" ? row.valueTwoCycle : row.value;
         const centerX = margin.left + xStep * index + xStep / 2;
-        const valueY = y(row.value);
+        const valueY = y(value);
         const barY = Math.min(valueY, baseY);
         const barHeight = Math.max(1, Math.abs(baseY - valueY));
         chart.append(el("rect", {
-          class: row.value < 0 ? "bar negative" : "bar",
+          class: value < 0 ? "bar negative" : "bar",
           x: centerX - barWidth / 2,
           y: barY,
           width: barWidth,
@@ -365,7 +419,7 @@
             x: centerX,
             y: valueY - 7,
             "text-anchor": "middle",
-          }, formatPrice(row.value)));
+          }, formatPrice(value)));
         }
 
         if (rows.length <= 40 || index % Math.ceil(rows.length / 18) === 0) {
@@ -389,19 +443,43 @@
         const tr = document.createElement("tr");
         tr.innerHTML = `
           <td>${row.label}</td>
-          <td>${formatPrice(row.value)}</td>
+          <td class="col-one-hour">${formatPrice(row.value)}</td>
+          <td class="col-two-hour">${formatPrice(row.valueTwoCycle)}</td>
           <td>${row.observations.toLocaleString("en")}</td>
         `;
         tableBody.append(tr);
       });
     }
 
+    function applyMetricVisibility() {
+      const metric = metricSelect.value;
+      const showTwoHour = metric === "twoHourTwoCycles";
+      document.querySelectorAll(".col-one-hour").forEach((cell) => {
+        cell.style.display = showTwoHour ? "none" : "";
+      });
+      document.querySelectorAll(".col-two-hour").forEach((cell) => {
+        cell.style.display = showTwoHour ? "" : "none";
+      });
+    }
+
     function render() {
+      updateControlState();
       const rows = selectedRows();
-      const values = rows.map((row) => row.value).filter((value) => value !== null);
-      chartTitle.textContent = `${countrySelect.value}: daily price spread by ${granularitySelect.value}`;
+      const granularity = granularitySelect.value;
+      const country = countrySelect.value;
+      const year = yearSelect.value;
+      const month = monthSelect.value;
+      const metricLabel = metricSelect.value === "twoHourTwoCycles" ? "2h x2 cycles" : "1h x1 cycle";
+      if (granularity === "day") {
+        chartTitle.textContent = `${country}: ${metricLabel}, ${formatMonth(month)} ${year}`;
+      } else if (granularity === "month") {
+        chartTitle.textContent = `${country}: ${metricLabel} by month, ${year}`;
+      } else {
+        chartTitle.textContent = `${country}: ${metricLabel} by year`;
+      }
       drawChart(rows);
       renderTable(rows);
+      applyMetricVisibility();
     }
 
     function boot(data) {
@@ -409,6 +487,9 @@
       populateCountries();
       const germany = dataset.countries.find((country) => country.name === "Germany");
       if (germany) countrySelect.value = germany.name;
+      populateYears(countrySelect.value);
+      yearSelect.value = countryYears(countrySelect.value).at(-1);
+      populateMonths(countrySelect.value, yearSelect.value);
       render();
     }
 
@@ -419,8 +500,17 @@
     }
 
     countrySelect.addEventListener("change", () => {
+      populateYears(countrySelect.value);
+      yearSelect.value = countryYears(countrySelect.value).at(-1);
+      populateMonths(countrySelect.value, yearSelect.value);
       render();
     });
+    metricSelect.addEventListener("change", render);
+    yearSelect.addEventListener("change", () => {
+      populateMonths(countrySelect.value, yearSelect.value);
+      render();
+    });
+    monthSelect.addEventListener("change", render);
     granularitySelect.addEventListener("change", render);
   </script>
 </body>

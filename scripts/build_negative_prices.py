@@ -14,6 +14,8 @@ SPOT_OUTPUT_JSON = ROOT / "data" / "spot_prices.json"
 SPOT_OUTPUT_JS = ROOT / "data" / "spot_prices.js"
 PROFILE_OUTPUT_JSON = ROOT / "data" / "generation_profiles.json"
 PROFILE_OUTPUT_JS = ROOT / "data" / "generation_profiles.js"
+IMPACT_OUTPUT_JSON = ROOT / "data" / "renewable_negative_impact.json"
+IMPACT_OUTPUT_JS = ROOT / "data" / "renewable_negative_impact.js"
 
 
 def parse_local_datetime(value):
@@ -81,6 +83,197 @@ def generation_profiles_payload():
     }
 
 
+def blank_impact_bucket(label):
+    return {
+        "label": label,
+        "totalVolume": 0.0,
+        "negativeVolume": 0.0,
+        "continuousVolume": 0.0,
+        "negativeShare": None,
+        "continuousShare": None,
+    }
+
+
+def finalize_impact_bucket(bucket):
+    total = bucket["totalVolume"]
+    bucket["negativeShare"] = round(bucket["negativeVolume"] / total, 6) if total else None
+    bucket["continuousShare"] = round(bucket["continuousVolume"] / total, 6) if total else None
+    bucket["totalVolume"] = round(total, 6)
+    del bucket["negativeVolume"]
+    del bucket["continuousVolume"]
+
+
+def build_impact_payload(countries, months_by_country, hourly_rows_by_country, profile_payload, latest_local_date):
+    payload = {
+        "source": str(INPUT_CSV.relative_to(ROOT)).replace("\\", "/"),
+        "latestLocalDate": latest_local_date.isoformat() if latest_local_date else None,
+        "methodology": (
+            "For each observed calendar day, the denominator is the full theoretical daily generation profile. "
+            "All negative volume sums profile weights in every negative-price hour. Continuous volume sums profile "
+            "weights in every hour belonging to negative-price runs of at least six consecutive observed hours."
+        ),
+        "countries": [
+            {
+                "name": country,
+                "iso3": countries[country],
+                "years": sorted({month[:4] for month in months_by_country[country]}),
+            }
+            for country in sorted(countries)
+        ],
+        "technologies": {
+            key: {"label": value["label"]}
+            for key, value in profile_payload["technologies"].items()
+        },
+        "series": {},
+    }
+
+    for country, rows in hourly_rows_by_country.items():
+        sorted_rows = sorted(rows, key=lambda item: item["local_dt"])
+        continuous_keys = set()
+        run = []
+        previous_dt = None
+
+        def close_run():
+            if len(run) >= 6:
+                continuous_keys.update(item["key"] for item in run)
+            run.clear()
+
+        for item in sorted_rows:
+            if item["price"] < 0:
+                if run and previous_dt is not None:
+                    gap_hours = (item["local_dt"] - previous_dt).total_seconds() / 3600
+                    if gap_hours > 1:
+                        close_run()
+                run.append(item)
+            else:
+                close_run()
+            previous_dt = item["local_dt"]
+        close_run()
+
+        payload["series"][country] = {"technologies": {}}
+        observed_days = sorted({item["local_dt"].strftime("%Y-%m-%d") for item in sorted_rows})
+
+        for tech_key, tech in profile_payload["technologies"].items():
+            years = {}
+
+            for day_key in observed_days:
+                year_key = day_key[:4]
+                month_key = day_key[:7]
+                day_label = str(int(day_key[8:10]))
+                years.setdefault(year_key, blank_impact_bucket(year_key))
+                years[year_key].setdefault("months", {})
+                years[year_key]["months"].setdefault(month_key, blank_impact_bucket(month_key))
+                years[year_key]["months"][month_key].setdefault("days", {})
+                years[year_key]["months"][month_key]["days"][day_key] = blank_impact_bucket(day_label)
+                years[year_key]["totalVolume"] += 1.0
+                years[year_key]["months"][month_key]["totalVolume"] += 1.0
+                years[year_key]["months"][month_key]["days"][day_key]["totalVolume"] = 1.0
+
+            for item in sorted_rows:
+                local_dt = item["local_dt"]
+                year_key = local_dt.strftime("%Y")
+                month_key = local_dt.strftime("%Y-%m")
+                day_key = local_dt.strftime("%Y-%m-%d")
+                hour_weight = tech["months"][local_dt.strftime("%m")][local_dt.hour]
+                if item["price"] < 0:
+                    years[year_key]["negativeVolume"] += hour_weight
+                    years[year_key]["months"][month_key]["negativeVolume"] += hour_weight
+                    years[year_key]["months"][month_key]["days"][day_key]["negativeVolume"] += hour_weight
+                if item["key"] in continuous_keys:
+                    years[year_key]["continuousVolume"] += hour_weight
+                    years[year_key]["months"][month_key]["continuousVolume"] += hour_weight
+                    years[year_key]["months"][month_key]["days"][day_key]["continuousVolume"] += hour_weight
+
+            for year_bucket in years.values():
+                finalize_impact_bucket(year_bucket)
+                for month_bucket in year_bucket["months"].values():
+                    finalize_impact_bucket(month_bucket)
+                    month_bucket["days"] = [
+                        day_bucket
+                        for _, day_bucket in sorted(month_bucket["days"].items())
+                    ]
+                    for day_bucket in month_bucket["days"]:
+                        finalize_impact_bucket(day_bucket)
+
+            payload["series"][country]["technologies"][tech_key] = {
+                "years": {
+                    year_key: years[year_key]
+                    for year_key in sorted(years)
+                }
+            }
+
+    return payload
+
+
+def best_two_cycle_spread(prices_by_hour):
+    if not prices_by_hour:
+        return None
+    prices = list(prices_by_hour)
+    if len(prices) != 24:
+        return None
+    if any(value is None for value in prices):
+        return None
+
+    buy_sum = [prices[i] + prices[i + 1] for i in range(23)]
+    sell_sum = [prices[i] + prices[i + 1] for i in range(23)]
+
+    # Enumerate valid 2h charge / 2h discharge cycles.
+    # charge block start c (covers c,c+1), discharge block start s (covers s,s+1),
+    # require discharge to start strictly after charge block ends: s >= c+2.
+    cycles = []
+    for charge_start in range(23):
+        for sell_start in range(charge_start + 2, 23):
+            cycles.append(
+                {
+                    "start": charge_start,
+                    "end": sell_start + 2,  # boundary hour when discharge finishes
+                    "profit": sell_sum[sell_start] - buy_sum[charge_start],
+                }
+            )
+
+    # Best one-cycle profit ending at or before each boundary (0..24).
+    best_end = [None] * 25
+    for cycle in cycles:
+        end = cycle["end"]
+        profit = cycle["profit"]
+        if best_end[end] is None or profit > best_end[end]:
+            best_end[end] = profit
+    best_prefix = [None] * 25
+    running = None
+    for boundary in range(25):
+        if best_end[boundary] is not None and (running is None or best_end[boundary] > running):
+            running = best_end[boundary]
+        best_prefix[boundary] = running
+
+    # Best one-cycle profit starting at or after each boundary (0..24).
+    best_start = [None] * 25
+    for cycle in cycles:
+        start = cycle["start"]
+        profit = cycle["profit"]
+        if best_start[start] is None or profit > best_start[start]:
+            best_start[start] = profit
+    best_suffix = [None] * 25
+    running = None
+    for boundary in range(24, -1, -1):
+        if best_start[boundary] is not None and (running is None or best_start[boundary] > running):
+            running = best_start[boundary]
+        best_suffix[boundary] = running
+
+    best_two = None
+    for boundary in range(25):
+        left = best_prefix[boundary]
+        right = best_suffix[boundary]
+        if left is None or right is None:
+            continue
+        total = left + right
+        if best_two is None or total > best_two:
+            best_two = total
+
+    if best_two is None:
+        return None
+    return best_two / 4.0
+
+
 def main():
     if not INPUT_CSV.exists():
         raise FileNotFoundError(f"Input CSV not found: {INPUT_CSV}")
@@ -96,6 +289,8 @@ def main():
     spot_month = defaultdict(lambda: {"sum": 0.0, "count": 0})
     spot_day = defaultdict(lambda: {"sum": 0.0, "count": 0, "min": None, "max": None})
     spot_hour = defaultdict(lambda: {"sum": 0.0, "count": 0})
+    spot_day_prices = defaultdict(lambda: [None] * 24)
+    hourly_rows_by_country = defaultdict(list)
     total_observations = 0
     total_negative = 0
     skipped_rows = 0
@@ -120,6 +315,14 @@ def main():
             date_key = local_dt.strftime("%Y-%m-%d")
 
             countries[country] = iso3
+            row_key = (country, local_dt.isoformat(), total_observations)
+            hourly_rows_by_country[country].append(
+                {
+                    "key": row_key,
+                    "local_dt": local_dt,
+                    "price": price,
+                }
+            )
             months_by_country[country].add(month_key)
             observed_days_by_month[(country, month_key)].add(day_key)
             if latest_local_date is None or local_dt.date() > latest_local_date:
@@ -133,6 +336,7 @@ def main():
             spot_day[(country, month_key, day_key)]["count"] += 1
             spot_hour[(country, month_key, local_dt.hour)]["sum"] += price
             spot_hour[(country, month_key, local_dt.hour)]["count"] += 1
+            spot_day_prices[(country, month_key, day_key)][local_dt.hour] = price
             if spot_day[(country, month_key, day_key)]["min"] is None or price < spot_day[(country, month_key, day_key)]["min"]:
                 spot_day[(country, month_key, day_key)]["min"] = price
             if spot_day[(country, month_key, day_key)]["max"] is None or price > spot_day[(country, month_key, day_key)]["max"]:
@@ -237,6 +441,7 @@ def main():
                 month_bucket = spot_month[(country, month_key)]
                 month_average = month_bucket["sum"] / month_bucket["count"] if month_bucket["count"] else None
                 month_spreads = []
+                month_spreads_two_cycle = []
                 month_number = int(month_key[5:7])
                 next_month = datetime(int(year) + (1 if month_number == 12 else 0), 1 if month_number == 12 else month_number + 1, 1)
                 current_month = datetime(int(year), month_number, 1)
@@ -252,15 +457,19 @@ def main():
 
                 for day in range(1, days_in_month + 1):
                     day_bucket = spot_day[(country, month_key, str(day))]
+                    day_prices = spot_day_prices[(country, month_key, str(day))]
                     average = day_bucket["sum"] / day_bucket["count"] if day_bucket["count"] else None
                     spread = (
                         day_bucket["max"] - day_bucket["min"]
                         if day_bucket["count"] and day_bucket["min"] is not None and day_bucket["max"] is not None
                         else None
                     )
+                    spread_two_cycle = best_two_cycle_spread(day_prices) if day_bucket["count"] else None
                     if spread is not None:
                         month_spreads.append(spread)
                         year_spreads.append(spread)
+                    if spread_two_cycle is not None:
+                        month_spreads_two_cycle.append(spread_two_cycle)
                     days.append(
                         {
                             "day": day,
@@ -268,6 +477,7 @@ def main():
                             "minPrice": day_bucket["min"],
                             "maxPrice": day_bucket["max"],
                             "dailySpread": spread,
+                            "dailySpreadTwoCycle2h": spread_two_cycle,
                             "observations": day_bucket["count"],
                         }
                     )
@@ -275,6 +485,7 @@ def main():
                 spot_series[country]["years"][year]["months"][month_key] = {
                     "averagePrice": month_average,
                     "averageDailySpread": sum(month_spreads) / len(month_spreads) if month_spreads else None,
+                    "averageDailySpreadTwoCycle2h": sum(month_spreads_two_cycle) / len(month_spreads_two_cycle) if month_spreads_two_cycle else None,
                     "observations": month_bucket["count"],
                     "hourlyAveragePrices": hourly_average_prices,
                     "days": days,
@@ -282,6 +493,14 @@ def main():
 
             spot_series[country]["years"][year]["averageDailySpread"] = (
                 sum(year_spreads) / len(year_spreads) if year_spreads else None
+            )
+            year_two_cycle_values = [
+                spot_series[country]["years"][year]["months"][month_key]["averageDailySpreadTwoCycle2h"]
+                for month_key in spot_series[country]["years"][year]["months"]
+                if spot_series[country]["years"][year]["months"][month_key]["averageDailySpreadTwoCycle2h"] is not None
+            ]
+            spot_series[country]["years"][year]["averageDailySpreadTwoCycle2h"] = (
+                sum(year_two_cycle_values) / len(year_two_cycle_values) if year_two_cycle_values else None
             )
 
     spot_payload = {
@@ -300,6 +519,13 @@ def main():
         "series": spot_series,
     }
     profile_payload = generation_profiles_payload()
+    impact_payload = build_impact_payload(
+        countries,
+        months_by_country,
+        hourly_rows_by_country,
+        profile_payload,
+        latest_local_date,
+    )
 
     OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     with OUTPUT_JSON.open("w", encoding="utf-8") as handle:
@@ -326,12 +552,22 @@ def main():
         json.dump(profile_payload, handle, ensure_ascii=False)
         handle.write(";\n")
 
+    with IMPACT_OUTPUT_JSON.open("w", encoding="utf-8") as handle:
+        json.dump(impact_payload, handle, ensure_ascii=False, indent=2)
+
+    with IMPACT_OUTPUT_JS.open("w", encoding="utf-8") as handle:
+        handle.write("window.RENEWABLE_NEGATIVE_IMPACT_DATA = ")
+        json.dump(impact_payload, handle, ensure_ascii=False)
+        handle.write(";\n")
+
     print(f"Wrote {OUTPUT_JSON}")
     print(f"Wrote {OUTPUT_JS}")
     print(f"Wrote {SPOT_OUTPUT_JSON}")
     print(f"Wrote {SPOT_OUTPUT_JS}")
     print(f"Wrote {PROFILE_OUTPUT_JSON}")
     print(f"Wrote {PROFILE_OUTPUT_JS}")
+    print(f"Wrote {IMPACT_OUTPUT_JSON}")
+    print(f"Wrote {IMPACT_OUTPUT_JS}")
     print(f"Rows processed: {total_observations:,}")
     print(f"Rows skipped: {skipped_rows:,}")
     print(f"Negative prices: {total_negative:,}")

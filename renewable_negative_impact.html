@@ -1,0 +1,503 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Renewable generation impacted by negative prices</title>
+  <style>
+    :root {
+      --bg: #f6f7f2;
+      --panel: #ffffff;
+      --ink: #18201c;
+      --muted: #667069;
+      --line: #d9dfd7;
+      --green: #1f8a70;
+      --red: #c83f3f;
+      --dark: #4a4f4b;
+      --shadow: 0 12px 34px rgba(31, 44, 37, 0.1);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    main {
+      width: min(1180px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 28px 0 38px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      min-height: 36px;
+      margin-bottom: 18px;
+      color: var(--ink);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(28px, 4vw, 48px);
+      line-height: 1.05;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      max-width: 710px;
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.5;
+    }
+
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(120px, 1fr));
+      gap: 12px;
+      min-width: min(820px, 100%);
+    }
+
+    label {
+      display: grid;
+      gap: 7px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    select {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      font: inherit;
+      padding: 0 12px;
+    }
+
+    select:disabled { opacity: 0.48; }
+
+    .chart-panel,
+    .table-panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .chart-panel {
+      padding: 18px;
+      margin-bottom: 14px;
+      overflow-x: auto;
+    }
+
+    .chart-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      justify-content: flex-end;
+      font-size: 12px;
+    }
+
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .swatch {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+      display: inline-block;
+    }
+
+    svg {
+      display: block;
+      width: 100%;
+      min-width: 780px;
+      height: auto;
+      min-height: 420px;
+    }
+
+    .axis,
+    .grid {
+      stroke: var(--line);
+      stroke-width: 1;
+    }
+
+    .tick,
+    .axis-label {
+      fill: var(--muted);
+      font-size: 12px;
+    }
+
+    .bar-negative { fill: var(--green); }
+    .bar-continuous { fill: var(--red); }
+
+    .empty {
+      fill: var(--muted);
+      font-size: 18px;
+      font-weight: 700;
+      text-anchor: middle;
+    }
+
+    .table-panel {
+      max-height: 340px;
+      overflow: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+
+    th,
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    th:first-child,
+    td:first-child {
+      text-align: left;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      z-index: 1;
+    }
+
+    @media (max-width: 980px) {
+      header { display: grid; }
+      .controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+
+    @media (max-width: 560px) {
+      main {
+        width: min(100vw - 20px, 1180px);
+        padding-top: 18px;
+      }
+      .controls { grid-template-columns: 1fr; }
+      .chart-panel { padding: 12px; }
+      svg { min-height: 360px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <a class="back-link" href="negative_prices.html">&lt;-- Back to negative prices</a>
+    <header>
+      <div>
+        <h1>Renewable generation impacted by neg prices</h1>
+        <p class="subtitle">Share of theoretical renewable generation exposed to negative price hours, compared with the full generation profile for the selected period.</p>
+      </div>
+      <div class="controls">
+        <label>
+          Country
+          <select id="countrySelect"></select>
+        </label>
+        <label>
+          Technology
+          <select id="technologySelect"></select>
+        </label>
+        <label>
+          Granularity
+          <select id="granularitySelect">
+            <option value="day">Day</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+          </select>
+        </label>
+        <label>
+          Year
+          <select id="yearSelect"></select>
+        </label>
+        <label>
+          Month
+          <select id="monthSelect"></select>
+        </label>
+      </div>
+    </header>
+
+    <section class="chart-panel">
+      <div class="chart-head">
+        <div id="chartTitle">Loading data...</div>
+        <div class="legend">
+          <span><i class="swatch" style="background: var(--green)"></i>All negative hours</span>
+          <span><i class="swatch" style="background: var(--red)"></i>Continuous &gt;= 6h</span>
+        </div>
+      </div>
+      <svg id="chart" viewBox="0 0 1100 520" role="img" aria-labelledby="chartTitle"></svg>
+    </section>
+
+    <section class="table-panel">
+      <table>
+        <thead>
+          <tr>
+            <th>Period</th>
+            <th>All negative hours</th>
+            <th>Continuous &gt;= 6h</th>
+            <th>Total theoretical volume</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </section>
+    <footer style="margin-top: 28px; color: #667069; font-size: 13px;">Source: Entsoe</footer>
+  </main>
+
+  <script src="data/renewable_negative_impact.js"></script>
+  <script>
+    const countrySelect = document.querySelector("#countrySelect");
+    const technologySelect = document.querySelector("#technologySelect");
+    const granularitySelect = document.querySelector("#granularitySelect");
+    const yearSelect = document.querySelector("#yearSelect");
+    const monthSelect = document.querySelector("#monthSelect");
+    const chartTitle = document.querySelector("#chartTitle");
+    const chart = document.querySelector("#chart");
+    const tableBody = document.querySelector("#tableBody");
+    let dataset;
+
+    const el = (name, attrs = {}, text = "") => {
+      const node = document.createElementNS("http://www.w3.org/2000/svg", name);
+      Object.entries(attrs).forEach(([key, value]) => node.setAttribute(key, value));
+      if (text) node.textContent = text;
+      return node;
+    };
+
+    const fmtShare = (value) => value === null || value === undefined || Number.isNaN(value) ? "-" : `${(value * 100).toFixed(2)}%`;
+    const fmtVolume = (value) => value === null || value === undefined || Number.isNaN(value) ? "-" : value.toFixed(2);
+    const formatMonth = (key, style = "long") => {
+      const [year, month] = key.split("-").map(Number);
+      return new Intl.DateTimeFormat("en", { month: style, year: "numeric" }).format(new Date(year, month - 1, 1));
+    };
+
+    function countryYears(countryName) {
+      return dataset.countries.find((country) => country.name === countryName).years;
+    }
+
+    function countryTechData() {
+      return dataset.series[countrySelect.value].technologies[technologySelect.value].years;
+    }
+
+    function populateCountries() {
+      countrySelect.innerHTML = "";
+      dataset.countries.forEach((country) => {
+        const option = document.createElement("option");
+        option.value = country.name;
+        option.textContent = `${country.name} (${country.iso3})`;
+        countrySelect.append(option);
+      });
+    }
+
+    function populateTechnologies() {
+      technologySelect.innerHTML = "";
+      Object.entries(dataset.technologies).forEach(([key, technology]) => {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = technology.label;
+        technologySelect.append(option);
+      });
+    }
+
+    function populateYears() {
+      yearSelect.innerHTML = "";
+      countryYears(countrySelect.value).slice().reverse().forEach((year) => {
+        const option = document.createElement("option");
+        option.value = year;
+        option.textContent = year;
+        yearSelect.append(option);
+      });
+    }
+
+    function populateMonths() {
+      monthSelect.innerHTML = "";
+      const yearData = countryTechData()[yearSelect.value];
+      Object.keys(yearData.months).sort().forEach((monthKey) => {
+        const option = document.createElement("option");
+        option.value = monthKey;
+        option.textContent = formatMonth(monthKey).replace(` ${yearSelect.value}`, "");
+        monthSelect.append(option);
+      });
+    }
+
+    function selectedRows() {
+      const data = countryTechData();
+      const granularity = granularitySelect.value;
+      if (granularity === "day") {
+        const monthData = data[yearSelect.value].months[monthSelect.value];
+        return monthData.days.map((row) => ({
+          label: row.label,
+          negativeShare: row.negativeShare,
+          continuousShare: row.continuousShare,
+          totalVolume: row.totalVolume,
+        }));
+      }
+      if (granularity === "month") {
+        return Object.entries(data[yearSelect.value].months)
+          .sort(([left], [right]) => left.localeCompare(right))
+          .map(([monthKey, row]) => ({
+            label: formatMonth(monthKey, "short"),
+            negativeShare: row.negativeShare,
+            continuousShare: row.continuousShare,
+            totalVolume: row.totalVolume,
+          }));
+      }
+      return Object.entries(data)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([yearKey, row]) => ({
+          label: yearKey,
+          negativeShare: row.negativeShare,
+          continuousShare: row.continuousShare,
+          totalVolume: row.totalVolume,
+        }));
+    }
+
+    function drawChart(rows) {
+      chart.innerHTML = "";
+      const width = 1100;
+      const height = 520;
+      const margin = { top: 42, right: 34, bottom: 70, left: 64 };
+      const innerWidth = width - margin.left - margin.right;
+      const innerHeight = height - margin.top - margin.bottom;
+      const maxValue = Math.max(0.01, ...rows.flatMap((row) => [row.negativeShare || 0, row.continuousShare || 0]));
+      const yMax = Math.max(0.05, maxValue * 1.12);
+      const baseY = margin.top + innerHeight;
+      const y = (value) => baseY - ((value || 0) / yMax) * innerHeight;
+      const xStep = innerWidth / Math.max(1, rows.length);
+      const barWidth = Math.max(5, Math.min(18, xStep * 0.26));
+
+      for (let i = 0; i <= 4; i += 1) {
+        const gridY = margin.top + (innerHeight / 4) * i;
+        const value = yMax * (1 - i / 4);
+        chart.append(el("line", { class: "grid", x1: margin.left, y1: gridY, x2: width - margin.right, y2: gridY }));
+        chart.append(el("text", { class: "tick", x: 16, y: gridY + 4 }, `${(value * 100).toFixed(1)}%`));
+      }
+
+      chart.append(el("line", { class: "axis", x1: margin.left, y1: baseY, x2: width - margin.right, y2: baseY }));
+      chart.append(el("line", { class: "axis", x1: margin.left, y1: margin.top, x2: margin.left, y2: baseY }));
+
+      rows.forEach((row, index) => {
+        const centerX = margin.left + xStep * index + xStep / 2;
+        const negativeY = y(row.negativeShare);
+        const continuousY = y(row.continuousShare);
+        chart.append(el("rect", { class: "bar-negative", x: centerX - barWidth - 2, y: negativeY, width: barWidth, height: baseY - negativeY, rx: 3 }));
+        chart.append(el("rect", { class: "bar-continuous", x: centerX + 2, y: continuousY, width: barWidth, height: baseY - continuousY, rx: 3 }));
+        if (rows.length <= 40 || index % Math.ceil(rows.length / 18) === 0) {
+          chart.append(el("text", {
+            class: "tick",
+            x: centerX,
+            y: height - 32,
+            "text-anchor": "middle",
+            transform: rows.length > 18 ? `rotate(-45 ${centerX} ${height - 32})` : "",
+          }, row.label));
+        }
+      });
+
+      chart.append(el("text", { class: "axis-label", x: margin.left, y: height - 16 }, "Period"));
+      chart.append(el("text", { class: "axis-label", x: 16, y: margin.top - 8 }, "Impacted volume share"));
+      if (!rows.length) {
+        chart.append(el("text", { class: "empty", x: width / 2, y: height / 2 }, "No data for this selection"));
+      }
+    }
+
+    function renderTable(rows) {
+      tableBody.innerHTML = rows.map((row) => `
+        <tr>
+          <td>${row.label}</td>
+          <td>${fmtShare(row.negativeShare)}</td>
+          <td>${fmtShare(row.continuousShare)}</td>
+          <td>${fmtVolume(row.totalVolume)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function render() {
+      const granularity = granularitySelect.value;
+      yearSelect.disabled = granularity === "year";
+      monthSelect.disabled = granularity !== "day";
+      const rows = selectedRows();
+      chartTitle.textContent = `${countrySelect.value}: impacted ${dataset.technologies[technologySelect.value].label} generation by ${granularity}`;
+      drawChart(rows);
+      renderTable(rows);
+    }
+
+    function updateCountry() {
+      populateYears();
+      yearSelect.value = countryYears(countrySelect.value).at(-1);
+      populateMonths();
+      render();
+    }
+
+    function updateYear() {
+      populateMonths();
+      render();
+    }
+
+    function boot(data) {
+      dataset = data;
+      populateCountries();
+      populateTechnologies();
+      const germany = dataset.countries.find((country) => country.name === "Germany") || dataset.countries[0];
+      countrySelect.value = germany.name;
+      technologySelect.value = Object.keys(dataset.technologies)[0];
+      populateYears();
+      yearSelect.value = countryYears(countrySelect.value).at(-1);
+      populateMonths();
+      render();
+    }
+
+    if (window.RENEWABLE_NEGATIVE_IMPACT_DATA) {
+      boot(window.RENEWABLE_NEGATIVE_IMPACT_DATA);
+    } else {
+      chartTitle.textContent = "Data file not found. Run scripts/build_negative_prices.py first.";
+    }
+
+    countrySelect.addEventListener("change", updateCountry);
+    technologySelect.addEventListener("change", () => {
+      populateMonths();
+      render();
+    });
+    granularitySelect.addEventListener("change", render);
+    yearSelect.addEventListener("change", updateYear);
+    monthSelect.addEventListener("change", render);
+  </script>
+</body>
+</html>

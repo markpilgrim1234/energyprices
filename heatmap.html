@@ -284,6 +284,7 @@
   <script>
     const countrySelect = document.querySelector("#countrySelect");
     const heatmapTitle = document.querySelector("#heatmapTitle");
+    const heatmapWrap = document.querySelector(".heatmap-wrap");
     const heatmapGrid = document.querySelector("#heatmapGrid");
     const totalNegative = document.querySelector("#totalNegative");
     const peakSlot = document.querySelector("#peakSlot");
@@ -366,6 +367,15 @@
           heatmapGrid.append(cell);
         });
       }
+
+      // Start from the most recent month (rightmost column).
+      const scrollToRight = () => {
+        const maxScrollLeft = Math.max(0, heatmapWrap.scrollWidth - heatmapWrap.clientWidth);
+        heatmapWrap.scrollLeft = maxScrollLeft;
+      };
+      scrollToRight();
+      requestAnimationFrame(scrollToRight);
+      setTimeout(scrollToRight, 0);
     }
 
     function boot(data) {
