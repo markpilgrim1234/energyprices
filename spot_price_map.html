@@ -62,7 +62,7 @@
       display: grid;
       grid-template-columns: repeat(4, minmax(130px, 1fr));
       gap: 12px;
-      min-width: min(640px, 100%);
+      min-width: min(760px, 100%);
     }
     label {
       display: grid;
@@ -164,8 +164,28 @@
       <div>
         <h1>Map</h1>
         <p class="subtitle">European spot price labels based on the selected country highlight, year, month, and granularity.</p>
+        <p style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: June 06, 2026</p>
       </div>
       <div class="controls">
+        <label>
+          Granularity
+          <select id="granularitySelect">
+            <option value="day">Day</option>
+            <option value="month">Month</option>
+            <option value="year">Year</option>
+          </select>
+        </label>
+        <label>
+          Price
+          <select id="priceTypeSelect">
+            <option value="wholesale">Wholesale market price</option>
+            <option id="capturedPriceOption" value="captured">Captured price</option>
+          </select>
+        </label>
+        <label>
+          Technology
+          <select id="technologySelect" disabled></select>
+        </label>
         <label>
           Country
           <select id="countrySelect"></select>
@@ -179,12 +199,8 @@
           <select id="monthSelect"></select>
         </label>
         <label>
-          Granularity
-          <select id="granularitySelect">
-            <option value="day">Day</option>
-            <option value="month">Month</option>
-            <option value="year">Year</option>
-          </select>
+          Day
+          <select id="daySelect"></select>
         </label>
       </div>
     </header>
@@ -192,18 +208,24 @@
       <div id="map"></div>
       <div id="mapTitle" class="map-title">Loading data...</div>
     </section>
-    <footer style="margin-top: 28px; color: #667069; font-size: 13px;">Source: Entsoe</footer>
+    <footer style="margin-top: 28px; color: #667069; font-size: 13px;">Source: Ember, Entsoe</footer>
   </main>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="data/spot_prices.js"></script>
+  <script src="data/generation_profiles.js"></script>
   <script>
+    const priceTypeSelect = document.querySelector("#priceTypeSelect");
+    const capturedPriceOption = document.querySelector("#capturedPriceOption");
+    const technologySelect = document.querySelector("#technologySelect");
     const countrySelect = document.querySelector("#countrySelect");
     const yearSelect = document.querySelector("#yearSelect");
     const monthSelect = document.querySelector("#monthSelect");
     const granularitySelect = document.querySelector("#granularitySelect");
+    const daySelect = document.querySelector("#daySelect");
     const mapTitle = document.querySelector("#mapTitle");
     let dataset;
+    let profileData;
     let map;
     let markerLayer;
 
@@ -246,6 +268,14 @@
       const [year, month] = key.split("-").map(Number);
       return new Intl.DateTimeFormat("en", { month: "long", year: "numeric" }).format(new Date(year, month - 1, 1));
     };
+    const formatDay = (monthKey, day) => {
+      const [year, month] = monthKey.split("-").map(Number);
+      return new Intl.DateTimeFormat("en", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+      }).format(new Date(year, month - 1, Number(day)));
+    };
 
     function setupMap() {
       map = L.map("map", {
@@ -269,6 +299,16 @@
         option.value = country.name;
         option.textContent = `${country.name} (${country.iso3})`;
         countrySelect.append(option);
+      });
+    }
+
+    function populateTechnologies() {
+      technologySelect.innerHTML = "";
+      Object.entries(profileData.technologies).forEach(([key, technology]) => {
+        const option = document.createElement("option");
+        option.value = key;
+        option.textContent = technology.label;
+        technologySelect.append(option);
       });
     }
 
@@ -297,19 +337,78 @@
       });
     }
 
+    function populateDays(countryName, year, month) {
+      const previousDay = daySelect.value;
+      daySelect.innerHTML = "";
+      const monthData = dataset.series[countryName].years[year].months[month];
+      monthData.days.filter((day) => day.observations > 0).forEach((day) => {
+        const option = document.createElement("option");
+        option.value = String(day.day);
+        option.textContent = String(day.day);
+        daySelect.append(option);
+      });
+      if ([...daySelect.options].some((option) => option.value === previousDay)) {
+        daySelect.value = previousDay;
+      }
+    }
+
+    function profileFor(monthKey) {
+      return profileData.technologies[technologySelect.value].months[monthKey.slice(5, 7)];
+    }
+
+    function capturedForMonth(monthData, weights) {
+      if (!monthData || !monthData.hourlyAveragePrices) return null;
+      let weighted = 0;
+      let weightTotal = 0;
+      monthData.hourlyAveragePrices.forEach((price, hour) => {
+        const weight = weights[hour] || 0;
+        if (price !== null && price !== undefined && weight > 0) {
+          weighted += price * weight;
+          weightTotal += weight;
+        }
+      });
+      return weightTotal ? weighted / weightTotal : null;
+    }
+
+    function capturedForYear(yearData) {
+      let weighted = 0;
+      let observations = 0;
+      Object.entries(yearData.months).forEach(([monthKey, monthData]) => {
+        const value = capturedForMonth(monthData, profileFor(monthKey));
+        if (value !== null && monthData.observations) {
+          weighted += value * monthData.observations;
+          observations += monthData.observations;
+        }
+      });
+      return observations ? weighted / observations : null;
+    }
+
     function countryValue(countryName) {
       const year = yearSelect.value;
       const month = monthSelect.value;
       const granularity = granularitySelect.value;
       const years = dataset.series[countryName].years;
       if (!years[year]) return null;
+      if (priceTypeSelect.value === "captured") {
+        if (granularity === "year") return capturedForYear(years[year]);
+        const monthData = years[year].months[month];
+        if (!monthData) return null;
+        if (granularity === "month") return capturedForMonth(monthData, profileFor(month));
+        const dayData = monthData.days.find((day) => String(day.day) === daySelect.value);
+        return dayData?.capturedPrices?.[technologySelect.value] ?? null;
+      }
       if (granularity === "year") return years[year].averagePrice;
       if (!years[year].months[month]) return null;
-      return years[year].months[month].averagePrice;
+      if (granularity === "month") return years[year].months[month].averagePrice;
+      const dayData = years[year].months[month].days.find((day) => String(day.day) === daySelect.value);
+      return dayData?.averagePrice ?? null;
     }
 
     function periodLabel() {
       if (granularitySelect.value === "year") return yearSelect.value;
+      if (granularitySelect.value === "day") {
+        return formatDay(monthSelect.value, daySelect.value);
+      }
       return formatMonth(monthSelect.value);
     }
 
@@ -327,7 +426,10 @@
       if (!map || !markerLayer) return;
       markerLayer.clearLayers();
       const period = periodLabel();
-      mapTitle.textContent = `Average spot prices, ${period}`;
+      const priceLabel = priceTypeSelect.value === "captured"
+        ? `${profileData.technologies[technologySelect.value].label} captured prices`
+        : "Wholesale market prices";
+      mapTitle.textContent = `${priceLabel}, ${period}`;
 
       dataset.countries.forEach((country) => {
         const center = countryCenters[country.name];
@@ -353,27 +455,51 @@
     function updateCountry() {
       populateYears(countrySelect.value);
       populateMonths(countrySelect.value, yearSelect.value);
+      populateDays(countrySelect.value, yearSelect.value, monthSelect.value);
       render();
     }
 
     function updateYear() {
       populateMonths(countrySelect.value, yearSelect.value);
+      populateDays(countrySelect.value, yearSelect.value, monthSelect.value);
       render();
     }
 
-    function boot(data) {
+    function updateMonth() {
+      populateDays(countrySelect.value, yearSelect.value, monthSelect.value);
+      render();
+    }
+
+    function updateControls() {
+      const granularity = granularitySelect.value;
+      const isDay = granularity === "day";
+      capturedPriceOption.disabled = isDay;
+      if (isDay && priceTypeSelect.value === "captured") {
+        priceTypeSelect.value = "wholesale";
+      }
+      technologySelect.disabled = priceTypeSelect.value !== "captured";
+      monthSelect.disabled = granularity === "year";
+      daySelect.disabled = !isDay;
+      render();
+    }
+
+    function boot(data, profiles) {
       if (!window.L) {
         mapTitle.textContent = "Map library not loaded. Check the internet connection.";
         return;
       }
       dataset = data;
+      profileData = profiles;
       setupMap();
       populateCountries();
+      populateTechnologies();
       const defaultCountry = dataset.countries.find((country) => country.name === "Germany") || dataset.countries[0];
       countrySelect.value = defaultCountry.name;
       populateYears(defaultCountry.name);
       populateMonths(defaultCountry.name, yearSelect.value);
-      render();
+      populateDays(defaultCountry.name, yearSelect.value, monthSelect.value);
+      technologySelect.value = "solar_pv";
+      updateControls();
       setTimeout(() => {
         map.invalidateSize();
         map.setView([48.8, 8.8], 5);
@@ -382,11 +508,14 @@
 
     countrySelect.addEventListener("change", updateCountry);
     yearSelect.addEventListener("change", updateYear);
-    monthSelect.addEventListener("change", render);
-    granularitySelect.addEventListener("change", render);
+    monthSelect.addEventListener("change", updateMonth);
+    daySelect.addEventListener("change", render);
+    priceTypeSelect.addEventListener("change", updateControls);
+    technologySelect.addEventListener("change", render);
+    granularitySelect.addEventListener("change", updateControls);
 
-    if (window.SPOT_PRICE_DATA) {
-      boot(window.SPOT_PRICE_DATA);
+    if (window.SPOT_PRICE_DATA && window.GENERATION_PROFILE_DATA) {
+      boot(window.SPOT_PRICE_DATA, window.GENERATION_PROFILE_DATA);
     } else {
       mapTitle.textContent = "Data file not found. Run scripts/build_negative_prices.py first.";
     }

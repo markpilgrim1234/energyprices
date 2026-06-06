@@ -274,6 +274,16 @@ def best_two_cycle_spread(prices_by_hour):
     return best_two / 4.0
 
 
+def captured_price(prices_by_hour, weights):
+    weighted_total = 0.0
+    weight_total = 0.0
+    for price, weight in zip(prices_by_hour, weights):
+        if price is not None and weight > 0:
+            weighted_total += price * weight
+            weight_total += weight
+    return weighted_total / weight_total if weight_total else None
+
+
 def main():
     if not INPUT_CSV.exists():
         raise FileNotFoundError(f"Input CSV not found: {INPUT_CSV}")
@@ -422,6 +432,7 @@ def main():
         "series": series,
     }
 
+    profile_payload = generation_profiles_payload()
     spot_series = {}
     for country, months in months_by_country.items():
         years = sorted({month[:4] for month in months})
@@ -459,6 +470,13 @@ def main():
                     day_bucket = spot_day[(country, month_key, str(day))]
                     day_prices = spot_day_prices[(country, month_key, str(day))]
                     average = day_bucket["sum"] / day_bucket["count"] if day_bucket["count"] else None
+                    captured_prices = {
+                        tech_key: captured_price(
+                            day_prices,
+                            technology["months"][month_key[5:7]],
+                        )
+                        for tech_key, technology in profile_payload["technologies"].items()
+                    }
                     spread = (
                         day_bucket["max"] - day_bucket["min"]
                         if day_bucket["count"] and day_bucket["min"] is not None and day_bucket["max"] is not None
@@ -479,6 +497,7 @@ def main():
                             "dailySpread": spread,
                             "dailySpreadTwoCycle2h": spread_two_cycle,
                             "observations": day_bucket["count"],
+                            "capturedPrices": captured_prices,
                         }
                     )
 
@@ -518,7 +537,6 @@ def main():
         ],
         "series": spot_series,
     }
-    profile_payload = generation_profiles_payload()
     impact_payload = build_impact_payload(
         countries,
         months_by_country,
