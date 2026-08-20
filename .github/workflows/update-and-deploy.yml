@@ -1,0 +1,85 @@
+name: Update prices and deploy Pages
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 5 * * 1"
+  push:
+    branches:
+      - main
+    paths:
+      - "*.html"
+      - "scripts/**"
+      - ".github/workflows/update-and-deploy.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Download prices and build dashboard data
+        run: python scripts/update_prices.py
+
+      - name: Verify generated data
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          required = (
+              "spot_prices.json",
+              "negative_prices.json",
+              "generation_profiles.json",
+              "renewable_negative_impact.json",
+          )
+          for filename in required:
+              path = Path("data") / filename
+              if not path.is_file() or path.stat().st_size == 0:
+                  raise SystemExit(f"Missing or empty generated file: {path}")
+
+          payload = json.loads((Path("data") / "spot_prices.json").read_text(encoding="utf-8"))
+          print(f"Latest available price date: {payload.get('latestLocalDate')}")
+          print(f"Rows processed: {payload.get('generatedFromRows')}")
+          PY
+
+      - name: Assemble static site
+        run: |
+          mkdir _site
+          cp ./*.html _site/
+          cp -R data _site/data
+          touch _site/.nojekyll
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
