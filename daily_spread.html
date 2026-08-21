@@ -206,7 +206,7 @@
       <div>
         <h1>Daily Spread</h1>
         <p class="subtitle">Difference between daily maximum and minimum wholesale electricity price, aggregated by selected time granularity.</p>
-        <p style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: June 06, 2026</p>
+        <p data-latest-date style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: loading...</p>
       </div>
       <div class="controls">
         <label>
@@ -264,6 +264,7 @@
   </main>
 
   <script src="data/spot_prices.js"></script>
+  <script src="data/site_meta.js"></script>
   <script>
     const countrySelect = document.querySelector("#countrySelect");
     const metricSelect = document.querySelector("#metricSelect");
@@ -310,6 +311,7 @@
         option.textContent = year;
         yearSelect.append(option);
       });
+      yearSelect.selectedIndex = 0;
     }
 
     function populateMonths(countryName, year) {
@@ -321,6 +323,7 @@
         option.textContent = formatMonth(month).replace(` ${year}`, "");
         monthSelect.append(option);
       });
+      monthSelect.value = months.at(-1);
     }
 
     function updateControlState() {

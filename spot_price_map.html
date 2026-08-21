@@ -164,7 +164,7 @@
       <div>
         <h1>Map</h1>
         <p class="subtitle">European spot price labels based on the selected country highlight, year, month, and granularity.</p>
-        <p style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: June 06, 2026</p>
+        <p data-latest-date style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: loading...</p>
       </div>
       <div class="controls">
         <label>
@@ -213,6 +213,7 @@
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="data/spot_prices.js"></script>
+  <script src="data/site_meta.js"></script>
   <script src="data/generation_profiles.js"></script>
   <script>
     const priceTypeSelect = document.querySelector("#priceTypeSelect");
@@ -324,6 +325,7 @@
         option.textContent = year;
         yearSelect.append(option);
       });
+      yearSelect.selectedIndex = 0;
     }
 
     function populateMonths(countryName, year) {
@@ -335,6 +337,7 @@
         option.textContent = formatMonth(month).replace(` ${year}`, "");
         monthSelect.append(option);
       });
+      monthSelect.value = months.at(-1);
     }
 
     function populateDays(countryName, year, month) {

@@ -251,7 +251,7 @@
       <div>
         <h1>By Country Negative Prices</h1>
         <p class="subtitle">Cumulative monthly negative price hours across the latest five years available for the selected country.</p>
-        <p style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: June 06, 2026</p>
+        <p data-latest-date style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: loading...</p>
       </div>
       <div class="controls">
         <label>
@@ -277,6 +277,7 @@
   </main>
 
   <script src="data/negative_prices.js"></script>
+  <script src="data/site_meta.js"></script>
   <script>
     const countrySelect = document.querySelector("#countrySelect");
     const chartTitle = document.querySelector("#chartTitle");

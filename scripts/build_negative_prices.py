@@ -16,6 +16,7 @@ PROFILE_OUTPUT_JSON = ROOT / "data" / "generation_profiles.json"
 PROFILE_OUTPUT_JS = ROOT / "data" / "generation_profiles.js"
 IMPACT_OUTPUT_JSON = ROOT / "data" / "renewable_negative_impact.json"
 IMPACT_OUTPUT_JS = ROOT / "data" / "renewable_negative_impact.js"
+SITE_META_OUTPUT_JS = ROOT / "data" / "site_meta.js"
 
 
 def parse_local_datetime(value):
@@ -578,6 +579,21 @@ def main():
         json.dump(impact_payload, handle, ensure_ascii=False)
         handle.write(";\n")
 
+    with SITE_META_OUTPUT_JS.open("w", encoding="utf-8") as handle:
+        handle.write("window.SITE_META = ")
+        json.dump({"latestLocalDate": latest_local_date.isoformat() if latest_local_date else None}, handle)
+        handle.write(";\n")
+        handle.write(
+            "document.querySelectorAll('[data-latest-date]').forEach(function (element) {\n"
+            "  var value = window.SITE_META.latestLocalDate;\n"
+            "  if (!value) { element.textContent = 'Latest available date: -'; return; }\n"
+            "  var parts = value.split('-').map(Number);\n"
+            "  var formatted = new Intl.DateTimeFormat('en', { day: '2-digit', month: 'long', year: 'numeric' })\n"
+            "    .format(new Date(parts[0], parts[1] - 1, parts[2]));\n"
+            "  element.textContent = 'Latest available date: ' + formatted;\n"
+            "});\n"
+        )
+
     print(f"Wrote {OUTPUT_JSON}")
     print(f"Wrote {OUTPUT_JS}")
     print(f"Wrote {SPOT_OUTPUT_JSON}")
@@ -586,6 +602,7 @@ def main():
     print(f"Wrote {PROFILE_OUTPUT_JS}")
     print(f"Wrote {IMPACT_OUTPUT_JSON}")
     print(f"Wrote {IMPACT_OUTPUT_JS}")
+    print(f"Wrote {SITE_META_OUTPUT_JS}")
     print(f"Rows processed: {total_observations:,}")
     print(f"Rows skipped: {skipped_rows:,}")
     print(f"Negative prices: {total_negative:,}")

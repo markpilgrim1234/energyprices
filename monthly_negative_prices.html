@@ -286,7 +286,7 @@
       <div>
         <h1>Monthly Negative Prices</h1>
         <p class="subtitle">Daily count of negative hourly prices and continuous negative price runs by country and month.</p>
-        <p style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: June 06, 2026</p>
+        <p data-latest-date style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: loading...</p>
       </div>
       <div class="controls">
         <label>
@@ -344,6 +344,7 @@
   </main>
 
   <script src="data/negative_prices.js"></script>
+  <script src="data/site_meta.js"></script>
   <script>
     const countrySelect = document.querySelector("#countrySelect");
     const yearSelect = document.querySelector("#yearSelect");
@@ -399,20 +400,20 @@
         option.textContent = year;
         yearSelect.append(option);
       });
+      yearSelect.selectedIndex = 0;
     }
 
     function populateMonths(countryName, year) {
       const country = dataset.countries.find((item) => item.name === countryName);
       monthSelect.innerHTML = "";
-      country.months
-        .filter((month) => month.startsWith(`${year}-`))
-        .slice()
-        .forEach((month) => {
+      const months = country.months.filter((month) => month.startsWith(`${year}-`));
+      months.forEach((month) => {
         const option = document.createElement("option");
         option.value = month;
         option.textContent = formatMonth(month).replace(` ${year}`, "");
         monthSelect.append(option);
       });
+      monthSelect.value = months.at(-1);
     }
 
     function drawChart(countryName, monthKey) {
@@ -576,12 +577,7 @@
         });
         if (firstCountryWithNegatives) countrySelect.value = firstCountryWithNegatives.name;
         populateYears(countrySelect.value);
-        yearSelect.value = countryYears(countrySelect.value)[0];
         populateMonths(countrySelect.value, yearSelect.value);
-        const recentActiveMonth = [...monthSelect.options].find((option) => {
-          return dataset.series[countrySelect.value][option.value].totalNegativePrices > 0;
-        });
-        if (recentActiveMonth) monthSelect.value = recentActiveMonth.value;
         render();
     }
 
@@ -594,10 +590,6 @@
     countrySelect.addEventListener("change", () => {
       populateYears(countrySelect.value);
       populateMonths(countrySelect.value, yearSelect.value);
-      const activeMonth = [...monthSelect.options].find((option) => {
-        return dataset.series[countrySelect.value][option.value].totalNegativePrices > 0;
-      });
-      if (activeMonth) monthSelect.value = activeMonth.value;
       render();
     });
 

@@ -246,7 +246,7 @@
       <div>
         <h1>Heatmap</h1>
         <p class="subtitle">Negative price counts by month and hour of day. Darker red means more negative price hours in that month-hour slot.</p>
-        <p style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: June 06, 2026</p>
+        <p data-latest-date style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: loading...</p>
       </div>
       <label>
         Country
@@ -282,6 +282,7 @@
   </main>
 
   <script src="data/negative_prices.js"></script>
+  <script src="data/site_meta.js"></script>
   <script>
     const countrySelect = document.querySelector("#countrySelect");
     const heatmapTitle = document.querySelector("#heatmapTitle");

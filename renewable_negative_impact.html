@@ -227,7 +227,7 @@
       <div>
         <h1>Renewable generation impacted by neg prices</h1>
         <p class="subtitle">Share of theoretical renewable generation exposed to negative price hours, compared with the full generation profile for the selected period.</p>
-        <p style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: June 06, 2026</p>
+        <p data-latest-date style="margin: 10px 0 0; color: #25322d; font-size: 14px; font-weight: 800;">Latest available date: loading...</p>
       </div>
       <div class="controls">
         <label>
@@ -285,6 +285,7 @@
   </main>
 
   <script src="data/renewable_negative_impact.js"></script>
+  <script src="data/site_meta.js"></script>
   <script>
     const countrySelect = document.querySelector("#countrySelect");
     const technologySelect = document.querySelector("#technologySelect");
@@ -346,17 +347,20 @@
         option.textContent = year;
         yearSelect.append(option);
       });
+      yearSelect.selectedIndex = 0;
     }
 
     function populateMonths() {
       monthSelect.innerHTML = "";
       const yearData = countryTechData()[yearSelect.value];
-      Object.keys(yearData.months).sort().forEach((monthKey) => {
+      const months = Object.keys(yearData.months).sort();
+      months.forEach((monthKey) => {
         const option = document.createElement("option");
         option.value = monthKey;
         option.textContent = formatMonth(monthKey).replace(` ${yearSelect.value}`, "");
         monthSelect.append(option);
       });
+      monthSelect.value = months.at(-1);
     }
 
     function selectedRows() {
